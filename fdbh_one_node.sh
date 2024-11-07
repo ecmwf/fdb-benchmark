@@ -8,38 +8,49 @@
   NPARAMS=$7
   check=$8
   reinstall=$9
+  artifact_dir=${10}
+  artifact_dir_is_shared=${11}
 
   nodelist=(${nodes//,/ })
   num_nodes=${#nodelist[@]}
 
+  # expand tilde in artifact dir if needed:
+  [[ "$artifact_dir" == '~/'* ]] && artifact_dir=${HOME}/${artifact_dir#"~/"}
+
   hostname
   echo "index: $I"
 
-  # --- prepare netcat
+  this_node=$(hostname)
 
-  netcat_dir=$HOME/artifacts/netcat
+  if [[ "$artifact_dir_is_shared" == "no" ]] || [[ "$this_node" == "${nodelist[0]}" ]] ; then
 
-  [[ "$reinstall" == "yes" ]] && rm -rf $HOME/artifacts/netcat
+    # --- prepare netcat
 
-  if [ ! -e $netcat_dir ] ; then
+    netcat_dir=${artifact_dir}/netcat
 
-    mkdir -p $netcat_dir
+    [[ "$reinstall" == "yes" ]] && rm -rf ${artifact_dir}/netcat
 
-    tar -xzvf $HOME/artifacts/netcat.tar.gz -C $HOME/artifacts
+    if [ ! -e $netcat_dir ] ; then
 
-  fi
+      mkdir -p $netcat_dir
 
-  # --- prepare fdb
+      tar -xzvf ${artifact_dir}/netcat.tar.gz -C ${artifact_dir}
 
-  fdb_dir=$HOME/artifacts/fdb-bundle
+    fi
 
-  [[ "$reinstall" == "yes" ]] && rm -rf $HOME/artifacts/fdb-bundle
+    # --- prepare fdb
 
-  if [ ! -e $fdb_dir ] ; then
+    fdb_dir=${artifact_dir}/fdb-bundle
 
-    mkdir -p $fdb_dir
+    [[ "$reinstall" == "yes" ]] && rm -rf ${artifact_dir}/fdb-bundle
 
-    tar -xzvf $HOME/artifacts/fdb-bundle.tar.gz -C $HOME/artifacts
+    if [ ! -e $fdb_dir ] ; then
+
+      mkdir -p $fdb_dir
+
+      tar -xzvf ${artifact_dir}/fdb-bundle.tar.gz -C ${artifact_dir}
+
+    fi
 
   fi
 
@@ -158,8 +169,8 @@
     local database_proc_i=$(( member_proc_i % procs_per_db ))
     local level=$(( ( nlevels * database_proc_i ) + 1 ))
 
-    local fdb_hammer=$HOME/artifacts/fdb-bundle/bin/fdb-hammer
-    local fdb_read=$HOME/artifacts/fdb-bundle/bin/fdb-read
+    local fdb_hammer=${artifact_dir}/fdb-bundle/bin/fdb-hammer
+    local fdb_read=${artifact_dir}/fdb-bundle/bin/fdb-read
 
     # run fdb-hammer
 
@@ -261,7 +272,7 @@
 
   }
 
-  test_src_dir=$HOME/artifacts
+  test_src_dir=${artifact_dir}
 
   cp $test_src_dir/sample1MiB $tmp_dir/sample1MiB
   cp $test_src_dir/schema_posix $tmp_dir/schema

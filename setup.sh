@@ -2,7 +2,10 @@
 
 cwd=$(pwd)
 
-git_dir=$HOME/git
+root=$HOME/fdb-hammer-parallel
+
+git_dir=$root/git
+mkdir -p $git_dir
 
 # --- netcat
 
@@ -56,8 +59,8 @@ EOF
 # watch out, if copy-pasting the EOF is not recognised
 fi
 
-fdb_build_dir=$HOME/build/fdb-bundle/
-fdb_dir=$HOME/install/fdb-bundle/
+fdb_build_dir=$root/build/fdb-bundle/
+fdb_dir=$root/install/fdb-bundle/
 
 if [ ! -e $fdb_dir ] ; then
   mkdir -p $fdb_build_dir
@@ -67,13 +70,17 @@ if [ ! -e $fdb_dir ] ; then
   cd ${git_dir}/fdb-bundle/fdb5/src/fdb5/tools
   wget -O fdb-hammer.cc https://raw.githubusercontent.com/ecmwf/fdb/refs/heads/manm_fdbhammer_prof/src/fdb5/tools/fdb-hammer.cc
 
-  # TODO: in src/fdb5/tools/fdb-hammer.cc, for every instances of
+  cd ${git_dir}/fdb-bundle/fdb5
+
+  # TODO: in src/fdb5/tools/fdb-hammer.cc, for every instance of
   #
   # // uncomment for rados runs
   #
   # comment out the line following it
 
   # TODO: in src/fdb5/message/MessageArchiver.cc::archive, comment out the following lines
+  #
+  # eckit::Timer timer("fdb::service::archive");
   #
   # eckit::Progress progress("FDB archive", 0, source.estimate());
   # 
@@ -88,7 +95,7 @@ if [ ! -e $fdb_dir ] ; then
   cmake --build . -j 12
   mkdir -p $fdb_dir
   cmake --install . --prefix $fdb_dir
-  cd $HOME/install
+  cd $root/install
   tar -zcvf fdb-bundle.tar.gz fdb-bundle
 fi
 

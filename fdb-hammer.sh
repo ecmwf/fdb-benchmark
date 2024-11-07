@@ -2,14 +2,17 @@
 
 # --- parse parameters
 
-nodelist_arg=( "localhost" )
+nodelist_arg=( "$(hostname)" )
 ppn=1
 NSTEPS=10
 NLEVELS=1
 NPARAMS=1
-config="$HOME/config.yaml.in"
+root="$HOME/fdb-hammer-parallel"
+config=
 check=no  # no, md, or full
 install=no  # yes or no
+artifact_dir='~/fdb-hammer-parallel/artifacts'
+artifact_dir_is_shared=no
 
 POSITIONAL=()
 while [[ $# -gt 0 ]] ; do
@@ -21,15 +24,18 @@ Usage:\n\n\
 ./fdb-hammer.sh <MODE> [options]\n\n\
 MODE: either write, read, or list\n\n\
 Available options:\n\n\
---nodelist <list>\n\nNode list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[000-010]. Default: localhost.\n\n\
+--nodelist <list>\n\nNode list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[000-010]. Do not use 'localhost' in this list, use the local host name if needed. Default: a list containing the local host name only (as provided by hostname).\n\n\
 --ppn <ppn>\n\nNumber of fdb-hammer processes to run on every client node in the provided node list. Default: 1.\n\n\
 --nsteps <nsteps>\n\nNumber of steps to archive by every client process. Default: 10.\n\n\
 --nlevels <nlevels>\n\nNumber of levels to archive by every client process. Default: 1.\n\n\
 --nparams <nparams>\n\nNumber of params to archive by every client process. Default: 1.\n\n\
---config <path>\n\nPath to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node. Default: \$HOME/config.yaml.in.\n\n\
+--root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-hammer-parallel.\n\n\
+--config <path>\n\nPath to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node. Default: <root>/config.yaml.in.\n\n\
 --md-check\n\nFlag to enable metadata consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification.\n\n\
 --full-check\n\nFlag to enable metadata and data consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification. This option is more compute demanding than --md-check.\n\n\
 --install\n\nFlag to enable installation of fdb-hammer and other necessary binaries on the client nodes. It must be specified on the first run on a given set of client nodes, or if the binaries on these nodes need to be updated with new ones.\n\n\
+--artifact-dir\n\nPath where to install binaries and artifacts on the client nodes. Use '~' to refer to the home directory on the nodes, but do not set artifact-dir to only '~'. Default: ~/fdb-hammer-parallel/artifacts.\n\n\
+--artifact-dir-is-shared\n\nFlag to be provided if the artifact directory on the client nodes is shared via a networked file system.\n\n\
 -h|--help\n\nshow this menu\
 "
     exit 0
@@ -59,6 +65,11 @@ Available options:\n\n\
     shift
     shift
     ;;
+    --root)
+    root="$2"
+    shift
+    shift
+    ;;
     --config)
     config="$2"
     shift
@@ -76,6 +87,15 @@ Available options:\n\n\
     install=yes
     shift
     ;;
+    --artifact-dir)
+    artifact_dir="$2"
+    shift
+    shift
+    ;;
+    --artifact-dir-is-shared)
+    artifact_dir_is_shared=yes
+    shift
+    ;;
     *)
     POSITIONAL+=( "$1" )
     shift
@@ -91,6 +111,8 @@ if [ ${#POSITIONAL[@]} -ne 1 ] ; then
 fi
 
 mode=$1
+
+[ -z "$config" ] && config=${root}/config.yaml.in
 
 nodes=($(python3 - "$nodelist_arg" <<EOF
 import sys
@@ -127,31 +149,35 @@ EOF
 # --- copy artifacts ---
 
 artifacts=( \
-  "$HOME/git/daos-tests/ngio/fdb_hammer/sample1MiB" \
-  "$HOME/git/daos-tests/ngio/fdb_hammer/schema_posix" \
+  "$root/git/daos-tests/ngio/fdb_hammer/sample1MiB" \
+  "$root/git/daos-tests/ngio/fdb_hammer/schema_posix" \
   "$config" \
 )
 
 [[ "$install" == "yes" ]] && artifacts+=( \
-  "$HOME/git/netcat.tar.gz" \
-  "$HOME/install/fdb-bundle.tar.gz" \
+  "$root/git/netcat.tar.gz" \
+  "$root/install/fdb-bundle.tar.gz" \
 )
 
-dest_dir_local=$HOME/artifacts
-dest_dir='~/artifacts/'
+artifact_dir_local="$artifact_dir"
+[[ "$artifact_dir" == '~/'* ]] && artifact_dir_local=${HOME}/${artifact_dir#"~/"}
+
+nodes_to_iterate=( "${nodes[@]}" )
+[[ "$artifact_dir_is_shared" == "yes" ]] && nodes_to_iterate=( "${nodes[0]}" )
+
 pids=()
 
-for node in "${nodes[@]}" ; do
+for node in "${nodes_to_iterate[@]}" ; do
 
   for artifact in "${artifacts[@]}" ; do
 
     if [[ "${node}" == "$(hostname)" ]] ; then
-      mkdir -p $dest_dir_local
-      cp $artifact ${dest_dir_local}/ &
+      mkdir -p $artifact_dir_local
+      cp $artifact ${artifact_dir_local}/ &
     else
-      ssh ${node} "mkdir -p ~/artifacts"
+      ssh ${node} "mkdir -p ${artifact_dir#"~/"}"
       set -m
-      scp $artifact ${node}:${dest_dir} &
+      scp $artifact ${node}:${artifact_dir} &
       set +m
     fi
 
@@ -186,7 +212,7 @@ i=0
 
 for node in "${nodes[@]}" ; do
 
-  args=($i $ppn $mode $nodelist $NSTEPS $NLEVELS $NPARAMS $check $install)
+  args=($i $ppn $mode $nodelist $NSTEPS $NLEVELS $NPARAMS $check $install $artifact_dir $artifact_dir_is_shared)
 
   out=$(mktemp)
 

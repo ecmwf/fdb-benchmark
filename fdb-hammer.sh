@@ -4,6 +4,7 @@
 
 nodelist_arg=( "$(hostname)" )
 ppn=1
+nmembers=default
 NSTEPS=10
 NLEVELS=1
 NPARAMS=1
@@ -13,6 +14,11 @@ check=no  # no, md, or full
 install=no  # yes or no
 artifact_dir='~/fdb-hammer-parallel/artifacts'
 artifact_dir_is_shared=no
+
+itt=no
+poll_period=1
+nodelist_read_arg=
+ppn_read=
 
 POSITIONAL=()
 while [[ $# -gt 0 ]] ; do
@@ -24,11 +30,16 @@ Usage:\n\n\
 ./fdb-hammer.sh <MODE> [options]\n\n\
 MODE: either write, read, or list\n\n\
 Available options:\n\n\
---nodelist <list>\n\nNode list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[000-010]. Do not use 'localhost' in this list, use the local host name if needed. Default: a list containing the local host name only (as provided by hostname).\n\n\
+--nodelist <list>\n\nNode list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[001-010]. Do not use 'localhost' in this list, use the local host name if needed. Default: a list containing the local host name only (as provided by hostname).\n\n\
 --ppn <ppn>\n\nNumber of fdb-hammer processes to run on every client node in the provided node list. Default: 1.\n\n\
---nsteps <nsteps>\n\nNumber of steps to archive by every client process. Default: 10.\n\n\
---nlevels <nlevels>\n\nNumber of levels to archive by every client process. Default: 1.\n\n\
---nparams <nparams>\n\nNumber of params to archive by every client process. Default: 1.\n\n\
+--nmembers <nmembers>\n\nTotal number of members to archive/retrieve by all client nodes and process. It must be a multiple or submultiple of the number of nodes in the nodelist. If larger than the number of nodes, a node will produce/consume data for more than one member. If smaller, multiple nodes will produce/consume data for a same member. Default: one per node in --nodelist (this default behaviour can be triggered by providing no value or with --nmembers default).\n\n\
+--nsteps <nsteps>\n\nNumber of steps to archive/retrieve by every client process. Default: 10.\n\n\
+--nlevels <nlevels>\n\nNumber of levels to archive/retrieve by every client process. Default: 1.\n\n\
+--nparams <nparams>\n\nNumber of params to archive/retrieve by every client process. Default: 1.\n\n\
+--itt\n\nFlag to enable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.\n\n\
+--poll-period <period>\n\nIf --itt is specified, --poll-period deterimnes the number of seconds between polling retries in reader processes. Default: 1.\n\n\
+--nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
+--ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
 --root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-hammer-parallel.\n\n\
 --config <path>\n\nPath to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node. Default: <root>/config.yaml.in.\n\n\
 --md-check\n\nFlag to enable metadata consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification.\n\n\
@@ -50,6 +61,11 @@ Available options:\n\n\
     shift
     shift
     ;;
+    --nmembers)
+    nmembers="$2"
+    shift
+    shift
+    ;;
     --nsteps)
     NSTEPS="$2"
     shift
@@ -62,6 +78,25 @@ Available options:\n\n\
     ;;
     --nparams)
     NPARAMS="$2"
+    shift
+    shift
+    ;;
+    --itt)
+    itt=yes
+    shift
+    ;;
+    --poll-period)
+    poll_period="$2"
+    shift
+    shift
+    ;;
+    --nodelist-read)
+    nodelist_read_arg="$2"
+    shift
+    shift
+    ;;
+    --ppn-read)
+    ppn_read="$2"
     shift
     shift
     ;;
@@ -114,7 +149,23 @@ mode=$1
 
 [ -z "$config" ] && config=${root}/config.yaml.in
 
-nodes=($(python3 - "$nodelist_arg" <<EOF
+if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+  if [ -z "$nodelist_read_arg" ] ; then
+    echo "A list of reader nodes must be specified via --nodelist-read if running the benchmark in ITT read mode."
+    exit 1
+  fi
+  if [ -z "$ppn_read" ] ; then
+    echo "The number of reader processes to run per node must be specified via --ppn-read if running the benchmark in ITT read mode."
+    exit 1
+  fi
+fi
+
+
+
+# --- parse slurm node lists
+
+expand_slurm_nodelist() {
+  echo $(python3 - "$1" <<EOF
 import sys
 import re
 
@@ -142,11 +193,19 @@ for b in blocks:
   else:
     print(b)
 EOF
-))
+  )
+}
+
+nodes_write=(expand_slurm_nodelist "$nodelist_arg")
+nodes=$nodes_write
+
+nodes_read=
+[[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \
+  nodes_read=(expand_slurm_nodelist "$nodelist_read_arg") && nodes=$nodes_read
 
 
 
-# --- copy artifacts ---
+# --- copy artifacts
 
 artifacts=( \
   "$root/git/daos-tests/ngio/fdb_hammer/sample1MiB" \
@@ -195,12 +254,103 @@ done
 
 
 
+# --- sanity check members
+
+num_nodes=${#nodes_write[@]}
+
+if [[ "$nmembers" == "default" ]] ; then
+  nmembers=$num_nodes
+fi
+if [ "$nmembers" -lt "$num_nodes" ] ; then
+  (( "$num_nodes" % "$nmembers" != 0 )) && \
+    echo "num_nodes must be divisible by nmembers if nmembers < num_nodes" && \
+    exit 1
+else
+  (( "$nmembers" % "$num_nodes" != 0 )) && \
+    echo "nmembers must be a multiple of num_nodes if nmembers >= num_nodes" && \
+    exit 1
+  (( ( "$num_nodes" * "$ppn" ) % "$nmembers" != 0 )) && \
+    echo "num_nodes * ppn must be divisible by nmembers if nmembers >= num_nodes" && \
+    exit 1
+fi
+
+
+
+if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+
+  # --- sanity check steps and reader procs if --itt read
+
+  num_nodes_read=${#nodes_read[@]}
+  
+  if [ "$NSTEPS" -lt "$num_nodes_read" ] ; then
+    (( "$num_nodes_read" % "$NSTEPS" != 0 )) && \
+      echo "num reader nodes must be divisible by nsteps if nsteps < num reader nodes" && \
+      exit 1
+  else
+    (( "$NSTEPS" % "$num_nodes_read" != 0 )) && \
+      echo "NSTEPS must be a multiple of num reader nodes if NSTEPS >= num reader nodes" && \
+      exit 1
+  fi
+
+  reader_procs_per_step=$ppn_read
+  [ "$NSTEPS" -lt "$num_nodes_read" ] && \
+    reader_procs_per_step=$(( ppn_read * num_nodes_read / NSTEPS ))
+  num_nodes_write=${#nodes_write[@]}
+  fields_per_step=$(( num_nodes_write * ppn * NLEVELS * NPARAMS ))
+
+  (( "$fields_per_step" % "$reader_procs_per_step" != 0 )) && \
+    echo "The total number of fields archived per step (${num_nodes_write} x ${ppn} x ${NLEVELS} x ${NPARAMS} = ${fields_per_step}) must be divisible by the number of reader processes per step (${reader_procs_per_step})." && \
+    exit 1
+
+
+
+  # --- generate lists of randomly ordered levels for each reader node
+
+  # This code assumes every reader node will read data for only one step.
+  # One list of randomly ordered levels is passed as input to every reader node.
+  # If the benchmark is configured with more reader nodes than steps, and therefore
+  # multiple reader nodes read data for the same step, the reader nodes for a given
+  # step will all receive the same list of levels and each node will extract a 
+  # different subset of levels from the provided list.
+  # If the benchmark is configured with less reader nodes than steps, and therefore
+  # a reader node reads data for multiple steps, the same list of randomly ordered
+  # levels provided as input is used for all steps. Because each reader node will 
+  # read its assigned steps with a stride of #number_of_reader nodes, and each 
+  # reader process reads parameters in a different order, the read order for every 
+  # subsequent step read (both overall and within a reader node) will be different.
+
+  level_lists=()
+
+  if [ "$num_nodes_write" -lt "$nmembers" ] ; then
+    members_per_node=$(( nmembers / num_nodes_write ))
+    written_levels_per_step=$(( NLEVELS * ppn / members_per_node ))
+  else
+    nodes_per_member=$(( num_nodes_write / nmembers ))
+    written_levels_per_step=$(( NLEVELS * ppn * nodes_per_member ))
+  fi
+
+  for node in `seq 1 $num_nodes_read` ; do
+    list=($(seq 1 $written_levels_per_step | shuf))
+    level_lists+=( $(echo "${list[@]}" | tr -s ' ' ',') )
+  done
+
+fi
+
+
+
 # --- execute 
 
 nodelist=""
 sep=""
-for node in "${nodes[@]}" ; do
+for node in "${nodes_write[@]}" ; do
   nodelist=${nodelist}${sep}${node}
+  sep=","
+done
+
+nodelist_read=""
+sep=""
+for node in "${nodes_read[@]}" ; do
+  nodelist_read=${nodelist_read}${sep}${node}
   sep=","
 done
 
@@ -212,7 +362,14 @@ i=0
 
 for node in "${nodes[@]}" ; do
 
-  args=($i $ppn $mode $nodelist $NSTEPS $NLEVELS $NPARAMS $check $install $artifact_dir $artifact_dir_is_shared)
+  args=( \
+    $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
+    $check $install $artifact_dir $artifact_dir_is_shared \
+    $itt $nodelist_read $ppn_read ${level_lists[ $(( i + 1 )) ]} $poll_period \
+  )
+
+  [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \
+    args+=( ${level_lists[ $(( i + 1 )) ]} )
 
   out=$(mktemp)
 
@@ -266,7 +423,8 @@ done
 
 if [[ "$mode" != "list" ]] ; then
   echo "----------------"
-  echo "Total ${mode} bandwidth: ${bw} MiB/s"
+  ( ! ( [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ) ) && \
+    echo "Total ${mode} bandwidth: ${bw} MiB/s"
   [ "$failures" -ne 0 ] && echo "Got ${failures} failures"
   [ "$consistency_failures" -ne 0 ] && echo "Found ${consistency_failures} inconsistencies"
   echo "----------------"

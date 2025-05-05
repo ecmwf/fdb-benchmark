@@ -10,13 +10,14 @@
   reinstall=${10}
   artifact_dir=${11}
   artifact_dir_is_shared=${12}
-  itt=${13:-no}
-  barrier_port=${14:-}
-  barrier_max_wait=${15:-}
-  nodes_read=${16:-}
-  ppn_read=${17:-}
-  poll_period=${18:-}
-  level_list=${19:-}
+  verbose=${13}
+  itt=${14:-no}
+  barrier_port=${15:-}
+  barrier_max_wait=${16:-}
+  nodes_read=${17:-}
+  ppn_read=${18:-}
+  poll_period=${19:-}
+  level_list=${20:-}
 
   module load cmake gnu/11.2.0 2>&1
 
@@ -294,6 +295,9 @@
 
     # run fdb-hammer
 
+    verbose_arg=
+    [[ "$verbose" == "yes" ]] && verbose_arg="--verbose"
+
     if [[ "$mode" == "list" ]] ; then
 
       out=$(taskset -c $pin_proc $fdb_hammer \
@@ -308,6 +312,7 @@
               --level=1 \
               --nparams=$nparams \
               --config=$tmp_dir/config.yaml \
+              ${verbose_arg} \
               2>&1
       )
 
@@ -339,6 +344,7 @@
                   --nparams=$nparams \
                   $check_arg \
                   --config=$tmp_dir/config.yaml \
+                  ${verbose_arg} \
                   2>&1
           )
                   #--nlevels=$levels_per_reader_proc \
@@ -366,6 +372,7 @@
                 --nparams=$nparams \
                 $check_arg \
                 --config=$tmp_dir/config.yaml \
+                ${verbose_arg} \
                 2>&1
         )
 

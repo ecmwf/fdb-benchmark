@@ -65,11 +65,11 @@ endif()
 
 ecbuild_bundle_initialize()
 
-ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"               TAG 2.38.0   UPDATE)
-ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.28.0   UPDATE)
-ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   TAG 1.5.2    UPDATE)
-ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.11.19  UPDATE)
-ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 5.13.103  UPDATE)
+ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"               BRANCH develop   UPDATE)
+ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 BRANCH develop   UPDATE)
+ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   BRANCH develop   UPDATE)
+ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                BRANCH develop   UPDATE)
+ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   BRANCH feature/fdb-hammer-consistency-checks   UPDATE)
 
 ecbuild_bundle_finalize()
 EOF
@@ -133,7 +133,7 @@ cat > ${root}/config.yaml.in <<EOF
 type: local
 spaces:
 - roots:
-  - path: /home/nx01/nx01/manm/itt_debug_fdb_root
+  - path: /store/nx01/nx01/manm/itt_debug_fdb_root
 schema: @SCHEMA_PATH@
 engine: toc
 store: file

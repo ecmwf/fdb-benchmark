@@ -14,6 +14,7 @@ check=no  # no, md, or full
 install=no  # yes or no
 artifact_dir='~/fdb-hammer-parallel/artifacts'
 artifact_dir_is_shared=no
+verbose=no
 
 itt=no
 barrier_port=7777
@@ -51,6 +52,7 @@ Available options:\n\n\
 --install\n\nFlag to enable installation of fdb-hammer and other necessary binaries on the client nodes. It must be specified on the first run on a given set of client nodes, or if the binaries on these nodes need to be updated with new ones.\n\n\
 --artifact-dir\n\nPath where to install binaries and artifacts on the client nodes. Use '~' to refer to the home directory on the nodes, but do not set artifact-dir to only '~'. Default: ~/fdb-hammer-parallel/artifacts.\n\n\
 --artifact-dir-is-shared\n\nFlag to be provided if the artifact directory on the client nodes is shared via a networked file system.\n\n\
+--verbose\nPrint field identifiers archived or retrieved.\n\n\
 -h|--help\n\nshow this menu\
 "
     exit 0
@@ -143,6 +145,10 @@ Available options:\n\n\
     ;;
     --artifact-dir-is-shared)
     artifact_dir_is_shared=yes
+    shift
+    ;;
+    --verbose)
+    verbose=yes
     shift
     ;;
     *)
@@ -383,7 +389,7 @@ for node in "${nodes[@]}" ; do
 
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
-    $check $install $artifact_dir $artifact_dir_is_shared \
+    $check $install $artifact_dir $artifact_dir_is_shared $verbose \
     $itt $barrier_port $barrier_max_wait $nodelist_read_itt $ppn_read_itt \
     $poll_period \
   )

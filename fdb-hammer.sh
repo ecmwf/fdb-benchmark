@@ -16,6 +16,8 @@ artifact_dir='~/fdb-hammer-parallel/artifacts'
 artifact_dir_is_shared=no
 
 itt=no
+barrier_port=7777
+barrier_max_wait=10
 poll_period=1
 nodelist_read_arg=
 ppn_read=
@@ -37,6 +39,8 @@ Available options:\n\n\
 --nlevels <nlevels>\n\nNumber of levels to archive/retrieve by every client process. Default: 1.\n\n\
 --nparams <nparams>\n\nNumber of params to archive/retrieve by every client process. Default: 1.\n\n\
 --itt\n\nFlag to enable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.\n\n\
+--barrier-port <port>\n\nIf --itt is specified and MODE is 'write', the port specified in --port will be used on the first writer node to listen for peer nodes to barrier. Default: 7777.\n\n\
+--barrier-max-wait <seconds>\n\nIf --itt is specified and MODE is 'write', --barrier-max-write deterimnes the number of seconds to wait for peer nodes during barriers before aborting. Default: 10.\n\n\
 --poll-period <period>\n\nIf --itt is specified, --poll-period deterimnes the number of seconds between polling retries in reader processes. Default: 1.\n\n\
 --nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
 --ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
@@ -83,6 +87,16 @@ Available options:\n\n\
     ;;
     --itt)
     itt=yes
+    shift
+    ;;
+    --barrier-port)
+    barrier_port="$2"
+    shift
+    shift
+    ;;
+    --barrier-max-wait)
+    barrier_max_wait="$2"
+    shift
     shift
     ;;
     --poll-period)
@@ -149,7 +163,7 @@ mode=$1
 
 [ -z "$config" ] && config=${root}/config.yaml.in
 
-if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
   if [ -z "$nodelist_read_arg" ] ; then
     echo "A list of reader nodes must be specified via --nodelist-read if running the benchmark in ITT read mode."
     exit 1
@@ -196,12 +210,12 @@ EOF
   )
 }
 
-nodes_write=(expand_slurm_nodelist "$nodelist_arg")
-nodes=$nodes_write
+nodes_write=( $(expand_slurm_nodelist "$nodelist_arg") )
+nodes=( ${nodes_write[@]} )
 
 nodes_read=
 [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \
-  nodes_read=(expand_slurm_nodelist "$nodelist_read_arg") && nodes=$nodes_read
+  nodes_read=( $(expand_slurm_nodelist "$nodelist_read_arg") ) && nodes=( ${nodes_read[@]} )
 
 
 
@@ -293,7 +307,7 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
   fi
 
   reader_procs_per_step=$ppn_read
-  [ "$NSTEPS" -lt "$num_nodes_read" ] && \
+  [ "$NSTEPS" -lt "$num_nodes_read" ] && \
     reader_procs_per_step=$(( ppn_read * num_nodes_read / NSTEPS ))
   num_nodes_write=${#nodes_write[@]}
   fields_per_step=$(( num_nodes_write * ppn * NLEVELS * NPARAMS ))
@@ -365,19 +379,20 @@ for node in "${nodes[@]}" ; do
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
     $check $install $artifact_dir $artifact_dir_is_shared \
-    $itt $nodelist_read $ppn_read ${level_lists[ $(( i + 1 )) ]} $poll_period \
+    $itt $barrier_port $barrier_max_wait $nodelist_read $ppn_read \
+    $poll_period \
   )
 
   [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \
-    args+=( ${level_lists[ $(( i + 1 )) ]} )
+    args+=( ${level_lists[ $(( i )) ]} )
 
   out=$(mktemp)
 
   if [[ "$node" == "$(hostname)" ]] ; then
-    bash -s -- ${args[@]} < fdbh_one_node.sh > $out &
+    bash -s -- ${args[@]} < fdbh_one_node.sh 2>&1 > $out &
   else
     set -m
-    ssh $node "bash -s -- ${args[@]}" < fdbh_one_node.sh > $out &
+    ssh $node "bash -s -- ${args[@]}" < fdbh_one_node.sh 2>&1 > $out &
     set +m
   fi
 
@@ -396,7 +411,6 @@ for pid in "${pids[@]}" ; do
 done
 
 echo Done
-echo "${outs[@]}"
 
 
 
@@ -423,9 +437,9 @@ done
 
 if [[ "$mode" != "list" ]] ; then
   echo "----------------"
-  ( ! ( [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ) ) && \
+  ( ! ( [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ) ) && \
     echo "Total ${mode} bandwidth: ${bw} MiB/s"
-  [ "$failures" -ne 0 ] && echo "Got ${failures} failures"
+  [ "$failures" -ne 0 ] && echo "Got ${failures} failures" || echo "No failures occurred"
   [ "$consistency_failures" -ne 0 ] && echo "Found ${consistency_failures} inconsistencies"
   echo "----------------"
 fi

@@ -1,4 +1,4 @@
-### Default fdb-hammer mode with pre-population, no reader staggering nor transposed read pattern
+### Default fdb-hammer mode with pre-population, no reader staggering nor transposed read pattern
 
 # populate FDB
 ./fdb-hammer.sh write --nodelist hostname[001-004] --ppn 16 --nsteps 100 --nlevels 10 --nparams 10 \

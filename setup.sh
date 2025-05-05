@@ -1,3 +1,19 @@
+#!/usr/bin/env bash
+
+set -e
+
+# TODO: arguments
+
+# root
+# rebuild or not
+rebuild=true
+# with profiling or not
+# with local lustre
+#   lustre root path
+# with remote fdb
+
+
+
 # --- retrieve and prepare artifacts ---
 
 cwd=$(pwd)
@@ -62,15 +78,18 @@ fi
 fdb_build_dir=$root/build/fdb-bundle/
 fdb_dir=$root/install/fdb-bundle/
 
-if [ ! -e $fdb_dir ] ; then
+if [ ! -e $fdb_dir ] || [[ "$rebuild" == "true" ]] ; then
   mkdir -p $fdb_build_dir
   cd $fdb_build_dir
   export PATH=$PATH:${git_dir}/ecbuild/bin
   cmake ${git_dir}/fdb-bundle -DENABLE_MEMFS=ON -DENABLE_AEC=OFF
-  cd ${git_dir}/fdb-bundle/fdb5/src/fdb5/tools
-  wget -O fdb-hammer.cc https://raw.githubusercontent.com/ecmwf/fdb/refs/heads/manm_fdbhammer_prof/src/fdb5/tools/fdb-hammer.cc
 
-  cd ${git_dir}/fdb-bundle/fdb5
+  # --- only if enabled profiling
+
+  #cd ${git_dir}/fdb-bundle/fdb5/src/fdb5/tools
+  #wget -O fdb-hammer.cc https://raw.githubusercontent.com/ecmwf/fdb/refs/heads/manm_fdbhammer_prof/src/fdb5/tools/fdb-hammer.cc
+
+  #cd ${git_dir}/fdb-bundle/fdb5
 
   # TODO: in src/fdb5/tools/fdb-hammer.cc, for every instance of
   #
@@ -91,7 +110,8 @@ if [ ! -e $fdb_dir ] ; then
   #                    << " in " << eckit::Seconds(timer.elapsed()) << " (" << eckit::Bytes(total_size, timer) << ")"
   #                    << std::endl;
 
-  cd $fdb_build_dir
+  #cd $fdb_build_dir
+
   cmake --build . -j 12
   mkdir -p $fdb_dir
   cmake --install . --prefix $fdb_dir
@@ -108,21 +128,21 @@ fi
 
 # --- FDB client config
 
-cat > $HOME/config.yaml.in <<EOF
-#type: local
-#spaces:
-#- roots:
-#  - path: /path/to/fdb/root
-#schema: @SCHEMA_PATH@
-#engine: toc
-#store: file
-#useSubToc: true
+cat > ${root}/config.yaml.in <<EOF
+type: local
+spaces:
+- roots:
+  - path: /home/nx01/nx01/manm/itt_debug_fdb_root
+schema: @SCHEMA_PATH@
+engine: toc
+store: file
+useSubToc: true
 
-type: remote
-host: hostname_remote_catalogue
-port: 10000
-engine: remote
-store: remote
+#type: remote
+#host: hostname_remote_catalogue
+#port: 10000
+#engine: remote
+#store: remote
 EOF
 
 cd $cwd

@@ -1,4 +1,3 @@
-
   I=$1
   ppn=$2
   mode=$3
@@ -12,11 +11,14 @@
   artifact_dir=${11}
   artifact_dir_is_shared=${12}
   itt=${13:-no}
-  nodes_read=${14:-}
-  ppn_read=${15:-}
-  level_list=${16:-}
-  poll_period=${17:-}
+  barrier_port=${14:-}
+  barrier_max_wait=${15:-}
+  nodes_read=${16:-}
+  ppn_read=${17:-}
+  poll_period=${18:-}
+  level_list=${19:-}
 
+  levelist=(${level_list//,/ })
   nodelist=(${nodes//,/ })
   num_nodes=${#nodelist[@]}
 
@@ -25,7 +27,7 @@
   # to shape the workload. The write node list and ppn are still required
   # for shaping the workload but are kept in separate variables.
 
-  if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+  if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
     nodelist_write=$nodelist
     num_nodes_write=$num_nodes
@@ -165,23 +167,23 @@
   ht=0
   n_procs=$(cat /proc/cpuinfo | grep "processor" | sort -u | wc -l)
   [ "$n_procs" -gt "$(( n_cores * n_chips ))" ] && ht=1
- 
+
   function client {
-  
+
     local i=$1
-  
+
     local failed=0
     local out=
-  
+
     local prof=
     local prof_sep=
-  
+
     local log=
     local log_sep=
-  
+
     # pinning
     local pin_proc=$(pin $((i + 1)) $n_chips $n_cores $ht)
-  
+
     # local page cache busting
     # (not relevant in itt mode as reading should always be configured
     #  to run on a different set of nodes than for writing, and even if 
@@ -190,7 +192,7 @@
 
     [[ "$mode" == "read" ]] && [[ "$itt" == "no" ]] && \
       I=$(( ( I + 1 )  % num_nodes ))
- 
+
     # calculate number and level for this process and node
 
     local nsteps=$NSTEPS
@@ -218,7 +220,7 @@
     local level=
     local levels=
 
-    if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+    if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
       if [ "$num_nodes_write" -lt "$nmembers" ] ; then
         members_per_node=$(( nmembers / num_nodes_write ))
@@ -234,7 +236,7 @@
 
           procs_per_step=$(( ppn * nodes_per_step ))
           procs_per_db=$(( procs_per_step / ndatabases ))
-          step_proc_i=$( (ppn * (I % nodes_per_step) + i ))
+          step_proc_i=$(( ppn * (I % nodes_per_step) + i ))
           database=$(( step_proc_i / procs_per_db ))
 
           database_proc_i=$(( step_proc_i % procs_per_db ))
@@ -254,8 +256,8 @@
           level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
       fi
 
-      levels=( "${level_list[ $level , $(( level + levels_per_reader_proc - 1 )) ]}" )
-      levels=$(echo "${levels[@]" | tr -s ' ' ',')
+      levels=( "${levelist[@]:$(( level - 1 )):${levels_per_reader_proc}}" )
+      levels=$(echo "${levels[@]}" | tr -s ' ' ',')
 
     else
 
@@ -303,7 +305,8 @@
               --nlevels=$(( nlevels * procs_per_db )) \
               --level=1 \
               --nparams=$nparams \
-              --config=$tmp_dir/config.yaml
+              --config=$tmp_dir/config.yaml \
+              2>&1
       )
 
     else
@@ -315,10 +318,10 @@
       [[ "$check" == "md" ]] && check_arg="--md-check"
       [[ "$check" == "full" ]] && check_arg="--full-check"
 
-      if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+      if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
         for step in "${steps[@]}" ; do
- 
+
           out=$(taskset -c $pin_proc $fdb_hammer \
                   $tmp_dir/sample1MiB \
                   $mode_arg \
@@ -333,7 +336,8 @@
                   --levels=$levels \
                   --nparams=$nparams \
                   $check_arg \
-                  --config=$tmp_dir/config.yaml
+                  --config=$tmp_dir/config.yaml \
+                  2>&1
           )
                   #--nlevels=$levels_per_reader_proc \
                   #--level=$level \
@@ -342,9 +346,14 @@
 
       else
 
+        itt_arg=
+        [[ "$itt" == "yes" ]] && itt_arg="--itt --ppn=${ppn} --nodes=${nodes} --barrier-port=${barrier_port} --barrier-max-wait=${barrier_max_wait}"
+
+
         out=$(taskset -c $pin_proc $fdb_hammer \
                 $tmp_dir/sample1MiB \
                 $mode_arg \
+                $itt_arg \
                 --class=rd \
                 --expver=xxxx \
                 --nsteps=$nsteps \
@@ -353,8 +362,9 @@
                 --nlevels=$nlevels \
                 --level=$level \
                 --nparams=$nparams \
-		$check_arg \
-                --config=$tmp_dir/config.yaml
+                $check_arg \
+                --config=$tmp_dir/config.yaml \
+                2>&1
         )
 
       fi
@@ -403,10 +413,10 @@
     [ $? != 0 ] && failed=1 && log="${log}"${log_sep}"log: $out" && log_sep="\n"
 
     prof="${prof}"${prof_sep}$(echo "$out") && prof_sep="\n"
-  
+
     [ $failed -ne 0 ] && echo "Node $I client $i failed at: ${mode}" \
             && echo -e "${log}" && echo -e "${prof}" && return
-  
+
     echo -e "Node $I client $i succeeded\n${prof}"
 
   }
@@ -426,10 +436,12 @@
 
   procs_to_run=$ppn
   [[ "$mode" == "list" ]] && procs_to_run=1
-  
+
   for i in $(seq 0 $((procs_to_run - 1))) ; do
     client $i &
   done
-  
+
   wait
 
+  cd
+  rm -rf ${tmp_dir}

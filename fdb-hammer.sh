@@ -354,7 +354,7 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   level_lists=()
 
-  for node in `seq 1 $num_nodes_read` ; do
+  for node in `seq 1 $num_nodes_read_itt` ; do
     list=($(seq 1 $written_levels_per_step | shuf))
     level_lists+=( $(echo "${list[@]}" | tr -s ' ' ',') )
   done

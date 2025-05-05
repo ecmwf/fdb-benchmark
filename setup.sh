@@ -5,6 +5,8 @@ set -e
 # TODO: arguments
 
 # root
+root=/storage/nx01/nx01/manm/fdb-hammer-parallel
+
 # rebuild or not
 rebuild=true
 # with profiling or not
@@ -18,8 +20,6 @@ rebuild=true
 # --- retrieve and prepare artifacts ---
 
 cwd=$(pwd)
-
-root=$HOME/fdb-hammer-parallel
 
 git_dir=$root/git
 mkdir -p $git_dir
@@ -133,7 +133,7 @@ cat > ${root}/config.yaml.in <<EOF
 type: local
 spaces:
 - roots:
-  - path: /store/nx01/nx01/manm/itt_debug_fdb_root
+  - path: /storage/nx01/nx01/manm/itt_debug_fdb_root
 schema: @SCHEMA_PATH@
 engine: toc
 store: file

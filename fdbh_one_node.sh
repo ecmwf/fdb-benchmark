@@ -18,6 +18,8 @@
   poll_period=${18:-}
   level_list=${19:-}
 
+  module load cmake gnu/11.2.0 2>&1
+
   levelist=(${level_list//,/ })
   nodelist=(${nodes//,/ })
   num_nodes=${#nodelist[@]}
@@ -368,45 +370,6 @@
         )
 
       fi
-
-# for read:
-#
-#        local tmpf=$(mktemp /tmp/req.XXXXXX)
-#
-#	local awkward_params=( 11 12 13 14 15 16 49 51 52 61 121 122 146 147 169 175 176 177 179 189 201 202 )
-#
-#        local paramlist=""
-#        local param=1
-#	local realparam=1
-#	local sep=""
-#        while [ $param -le $nparams ] ; do
-#          while [[ " ${awkward_params[*]} " =~ [[:space:]]${realparam}[[:space:]] ]] ; do
-#            realparam=$(( realparam + 1 ))
-#          done
-#	  paramlist=${paramlist}${sep}${realparam}
-#	  param=$(( param + 1 ))
-#	  realparam=$(( realparam + 1 ))
-#	  sep="/"
-#        done
-#
-#        cat > ${tmpf} <<EOF
-#retrieve,
-#class=rd,
-#expver=xxxx,
-#stream=enfo,
-#date=20230713,
-#time=0000,
-#domain=g,
-#type=pf,
-#levtype=pl,
-#levelist=${level}/to/$(( level + nlevels - 1 ))/by/1,
-#step=0/to/$(( nsteps - 1 ))/by/1,
-#param=${paramlist},
-#number=${number}
-#EOF
-#
-#        out=$(taskset -c $pin_proc $fdb_read $tmpf /dev/null --config=$tmp_dir/config.yaml)
-#        #out=$(echo "taskset -c $pin_proc $fdb_read $tmpf /dev/null --config=$tmp_dir/config.yaml")
 
     fi
 

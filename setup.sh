@@ -11,6 +11,7 @@ rebuild=true
 # with local lustre
 #   lustre root path
 # with remote fdb
+# prolog script to run on all nodes (e.g. module loads)
 
 
 

@@ -19,8 +19,8 @@ itt=no
 barrier_port=7777
 barrier_max_wait=10
 poll_period=1
-nodelist_read_arg=
-ppn_read=
+nodelist_read_itt_arg=
+ppn_read_itt=
 
 POSITIONAL=()
 while [[ $# -gt 0 ]] ; do
@@ -105,12 +105,12 @@ Available options:\n\n\
     shift
     ;;
     --nodelist-read)
-    nodelist_read_arg="$2"
+    nodelist_read_itt_arg="$2"
     shift
     shift
     ;;
     --ppn-read)
-    ppn_read="$2"
+    ppn_read_itt="$2"
     shift
     shift
     ;;
@@ -164,11 +164,11 @@ mode=$1
 [ -z "$config" ] && config=${root}/config.yaml.in
 
 if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
-  if [ -z "$nodelist_read_arg" ] ; then
+  if [ -z "$nodelist_read_itt_arg" ] ; then
     echo "A list of reader nodes must be specified via --nodelist-read if running the benchmark in ITT read mode."
     exit 1
   fi
-  if [ -z "$ppn_read" ] ; then
+  if [ -z "$ppn_read_itt" ] ; then
     echo "The number of reader processes to run per node must be specified via --ppn-read if running the benchmark in ITT read mode."
     exit 1
   fi
@@ -210,12 +210,12 @@ EOF
   )
 }
 
-nodes_write=( $(expand_slurm_nodelist "$nodelist_arg") )
-nodes=( ${nodes_write[@]} )
+nodes_write_or_read=( $(expand_slurm_nodelist "$nodelist_arg") )
+nodes=( ${nodes_write_or_read[@]} )
 
-nodes_read=
+nodes_read_itt=
 [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \
-  nodes_read=( $(expand_slurm_nodelist "$nodelist_read_arg") ) && nodes=( ${nodes_read[@]} )
+  nodes_read_itt=( $(expand_slurm_nodelist "$nodelist_read_itt_arg") ) && nodes=( ${nodes_read_itt[@]} )
 
 
 
@@ -235,12 +235,12 @@ artifacts=( \
 artifact_dir_local="$artifact_dir"
 [[ "$artifact_dir" == '~/'* ]] && artifact_dir_local=${HOME}/${artifact_dir#"~/"}
 
-nodes_to_iterate=( "${nodes[@]}" )
-[[ "$artifact_dir_is_shared" == "yes" ]] && nodes_to_iterate=( "${nodes[0]}" )
+nodes_to_configure=( "${nodes[@]}" )
+[[ "$artifact_dir_is_shared" == "yes" ]] && nodes_to_configure=( "${nodes[0]}" )
 
 pids=()
 
-for node in "${nodes_to_iterate[@]}" ; do
+for node in "${nodes_to_configure[@]}" ; do
 
   for artifact in "${artifacts[@]}" ; do
 
@@ -270,22 +270,25 @@ done
 
 # --- sanity check members
 
-num_nodes=${#nodes_write[@]}
+num_nodes=${#nodes_write_or_read[@]}
 
 if [[ "$nmembers" == "default" ]] ; then
   nmembers=$num_nodes
 fi
-if [ "$nmembers" -lt "$num_nodes" ] ; then
-  (( "$num_nodes" % "$nmembers" != 0 )) && \
-    echo "num_nodes must be divisible by nmembers if nmembers < num_nodes" && \
-    exit 1
-else
-  (( "$nmembers" % "$num_nodes" != 0 )) && \
-    echo "nmembers must be a multiple of num_nodes if nmembers >= num_nodes" && \
-    exit 1
-  (( ( "$num_nodes" * "$ppn" ) % "$nmembers" != 0 )) && \
-    echo "num_nodes * ppn must be divisible by nmembers if nmembers >= num_nodes" && \
-    exit 1
+
+if ( ! ( [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ) ) ; then
+  if [ "$nmembers" -lt "$num_nodes" ] ; then
+    (( "$num_nodes" % "$nmembers" != 0 )) && \
+      echo "num_nodes must be divisible by nmembers if nmembers < num_nodes" && \
+      exit 1
+  else
+    (( "$nmembers" % "$num_nodes" != 0 )) && \
+      echo "nmembers must be divisible by num_nodes if nmembers >= num_nodes" && \
+      exit 1
+    (( ( "$num_nodes" * "$ppn" ) % "$nmembers" != 0 )) && \
+      echo "num_nodes * ppn must be divisible by nmembers if nmembers >= num_nodes" && \
+      exit 1
+  fi
 fi
 
 
@@ -294,26 +297,36 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   # --- sanity check steps and reader procs if --itt read
 
-  num_nodes_read=${#nodes_read[@]}
+  num_nodes_read_itt=${#nodes_read_itt[@]}
   
-  if [ "$NSTEPS" -lt "$num_nodes_read" ] ; then
-    (( "$num_nodes_read" % "$NSTEPS" != 0 )) && \
+  if [ "$NSTEPS" -lt "$num_nodes_read_itt" ] ; then
+    (( "$num_nodes_read_itt" % "$NSTEPS" != 0 )) && \
       echo "num reader nodes must be divisible by nsteps if nsteps < num reader nodes" && \
       exit 1
   else
-    (( "$NSTEPS" % "$num_nodes_read" != 0 )) && \
+    (( "$NSTEPS" % "$num_nodes_read_itt" != 0 )) && \
       echo "NSTEPS must be a multiple of num reader nodes if NSTEPS >= num reader nodes" && \
       exit 1
   fi
 
-  reader_procs_per_step=$ppn_read
-  [ "$NSTEPS" -lt "$num_nodes_read" ] && \
-    reader_procs_per_step=$(( ppn_read * num_nodes_read / NSTEPS ))
-  num_nodes_write=${#nodes_write[@]}
-  fields_per_step=$(( num_nodes_write * ppn * NLEVELS * NPARAMS ))
+  reader_procs_per_step=$ppn_read_itt
+  [ "$NSTEPS" -lt "$num_nodes_read_itt" ] && \
+    reader_procs_per_step=$(( ppn_read_itt * num_nodes_read_itt / NSTEPS ))
 
-  (( "$fields_per_step" % "$reader_procs_per_step" != 0 )) && \
-    echo "The total number of fields archived per step (${num_nodes_write} x ${ppn} x ${NLEVELS} x ${NPARAMS} = ${fields_per_step}) must be divisible by the number of reader processes per step (${reader_procs_per_step})." && \
+  num_nodes_write=${#nodes_write_or_read[@]}
+  if [ "$num_nodes_write" -gt "$nmembers" ] ; then
+    nodes_per_member=$(( num_nodes_write / nmembers ))
+    procs_per_member=$(( ppn * nodes_per_member ))
+    written_levels_per_step=$(( NLEVELS * ppn * nodes_per_member ))
+  else
+    members_per_node=$(( nmembers / num_nodes_write ))
+    procs_per_member=$(( ppn / members_per_node ))
+    written_levels_per_step=$(( NLEVELS * ppn / members_per_node ))
+  fi
+  fields_per_step_per_member=$(( procs_per_member * NLEVELS * NPARAMS ))
+
+  (( "$fields_per_step_per_member" % "$reader_procs_per_step" != 0 )) && \
+    echo "The total number of fields archived per step per member (${procs_per_member} x ${NLEVELS} x ${NPARAMS} = ${fields_per_step_per_member}) must be divisible by the number of reader processes per step (${reader_procs_per_step})." && \
     exit 1
 
 
@@ -335,14 +348,6 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   level_lists=()
 
-  if [ "$num_nodes_write" -lt "$nmembers" ] ; then
-    members_per_node=$(( nmembers / num_nodes_write ))
-    written_levels_per_step=$(( NLEVELS * ppn / members_per_node ))
-  else
-    nodes_per_member=$(( num_nodes_write / nmembers ))
-    written_levels_per_step=$(( NLEVELS * ppn * nodes_per_member ))
-  fi
-
   for node in `seq 1 $num_nodes_read` ; do
     list=($(seq 1 $written_levels_per_step | shuf))
     level_lists+=( $(echo "${list[@]}" | tr -s ' ' ',') )
@@ -356,15 +361,15 @@ fi
 
 nodelist=""
 sep=""
-for node in "${nodes_write[@]}" ; do
+for node in "${nodes_write_or_read[@]}" ; do
   nodelist=${nodelist}${sep}${node}
   sep=","
 done
 
-nodelist_read=""
+nodelist_read_itt=""
 sep=""
-for node in "${nodes_read[@]}" ; do
-  nodelist_read=${nodelist_read}${sep}${node}
+for node in "${nodes_read_itt[@]}" ; do
+  nodelist_read_itt=${nodelist_read_itt}${sep}${node}
   sep=","
 done
 
@@ -372,14 +377,14 @@ pids=()
 outs=()
 i=0
 
-[[ "$mode" == "list" ]] && nodelist=${nodes[0]} && nodes=( ${nodelist} ) && ppn=1
+[[ "$mode" == "list" ]] && nodelist=${nodes_write_or_read[0]} && nodes=( ${nodelist} ) && ppn=1
 
 for node in "${nodes[@]}" ; do
 
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
     $check $install $artifact_dir $artifact_dir_is_shared \
-    $itt $barrier_port $barrier_max_wait $nodelist_read $ppn_read \
+    $itt $barrier_port $barrier_max_wait $nodelist_read_itt $ppn_read_itt \
     $poll_period \
   )
 

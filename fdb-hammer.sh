@@ -442,6 +442,7 @@ for out in "${outs[@]}" ; do
 
   echo $out
   cat $out
+  echo ""
   rm ${out}
 
 done

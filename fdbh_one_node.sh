@@ -328,8 +328,7 @@
       if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
         for step in "${steps[@]}" ; do
-
-          out=$(taskset -c $pin_proc $fdb_hammer \
+          out="${out}\n$(taskset -c $pin_proc $fdb_hammer \
                   $tmp_dir/sample1MiB \
                   $mode_arg \
                   --itt \
@@ -346,7 +345,7 @@
                   --config=$tmp_dir/config.yaml \
                   ${verbose_arg} \
                   2>&1
-          )
+          )"
                   #--nlevels=$levels_per_reader_proc \
                   #--level=$level \
 

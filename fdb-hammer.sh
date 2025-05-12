@@ -10,6 +10,7 @@ NLEVELS=1
 NPARAMS=1
 root="$HOME/fdb-hammer-parallel"
 config=
+prolog_script=none
 check=no  # no, md, or full
 install=no  # yes or no
 artifact_dir='~/fdb-hammer-parallel/artifacts'
@@ -47,6 +48,7 @@ Available options:\n\n\
 --ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
 --root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-hammer-parallel.\n\n\
 --config <path>\n\nPath to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node. Default: <root>/config.yaml.in.\n\n\
+--prolog-script <path>\n\nPath to a prolog script to be sourced first thing on each node in nodelist, for example to load required modules. Defaults to none.\n\n\
 --md-check\n\nFlag to enable metadata consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification.\n\n\
 --full-check\n\nFlag to enable metadata and data consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification. This option is more compute demanding than --md-check.\n\n\
 --install\n\nFlag to enable installation of fdb-hammer and other necessary binaries on the client nodes. It must be specified on the first run on a given set of client nodes, or if the binaries on these nodes need to be updated with new ones.\n\n\
@@ -123,6 +125,11 @@ Available options:\n\n\
     ;;
     --config)
     config="$2"
+    shift
+    shift
+    ;;
+    --prolog-script)
+    prolog_script="$2"
     shift
     shift
     ;;
@@ -232,6 +239,11 @@ artifacts=( \
   "$root/git/daos-tests/ngio/fdb_hammer/schema_posix" \
   "$config" \
 )
+
+if [[ "$prolog_script" != "none" ]] ; then
+  artifacts+=( "$prolog_script" )
+  prolog_script=$(basename $prolog_script)
+fi
 
 [[ "$install" == "yes" ]] && artifacts+=( \
   "$root/git/netcat.tar.gz" \
@@ -389,7 +401,7 @@ for node in "${nodes[@]}" ; do
 
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
-    $check $install $artifact_dir $artifact_dir_is_shared $verbose \
+    $check $install $artifact_dir $artifact_dir_is_shared $prolog_script $verbose \
     $itt $barrier_port $barrier_max_wait $nodelist_read_itt $ppn_read_itt \
     $poll_period \
   )

@@ -10,16 +10,17 @@
   reinstall=${10}
   artifact_dir=${11}
   artifact_dir_is_shared=${12}
-  verbose=${13}
-  itt=${14:-no}
-  barrier_port=${15:-}
-  barrier_max_wait=${16:-}
-  nodes_read=${17:-}
-  ppn_read=${18:-}
-  poll_period=${19:-}
-  level_list=${20:-}
+  prolog_script=${13}
+  verbose=${14}
+  itt=${15:-no}
+  barrier_port=${16:-}
+  barrier_max_wait=${17:-}
+  nodes_read=${18:-}
+  ppn_read=${19:-}
+  poll_period=${20:-}
+  level_list=${21:-}
 
-  module load cmake gnu/11.2.0 2>&1
+  [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
   levelist=(${level_list//,/ })
   nodelist=(${nodes//,/ })

@@ -203,20 +203,23 @@ s = sys.argv[1]
 
 #s = "compute-b24-[1-3,5-9],compute-b22-1,compute-b23-[3],compute-b25-[1,4,8]"
 
-blocks = re.findall(r'[^,\[]+(?:\[[^\]]*\])?', s)
+blocks = re.findall(r'[^,\[]+(?:\[[^\]]*\][^,]*)?', s)
 r = []
 for b in blocks:
   if '[' in b:
     parts = b.split('[')
-    ranges = parts[1].replace(']', '').split(',')
+    prefix = parts[0]
+    parts = parts[1].split(']')
+    suffix = parts[1]
+    ranges = parts[0].split(',')
     for i in ranges:
       if '-' in i:
         limits = i.split('-')
         digits = len(limits[0])
         for j in range(int(limits[0]), int(limits[1]) + 1):
-          print(parts[0] + (("%0" + str(digits) + "d") % (j,)))
+          print(prefix + (("%0" + str(digits) + "d") % (j,)) + suffix)
       else:
-        print(parts[0] + i)
+        print(prefix + i + suffix)
   else:
     print(b)
 EOF

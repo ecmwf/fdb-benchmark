@@ -179,11 +179,11 @@ endif()
 
 ecbuild_bundle_initialize()
 
-ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"               BRANCH develop   UPDATE)
-ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 BRANCH develop   UPDATE)
-ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   BRANCH develop   UPDATE)
-ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                BRANCH develop   UPDATE)
-ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   BRANCH feature/fdb-hammer-consistency-checks   UPDATE)
+ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"               TAG 2.41.0   UPDATE)
+ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.29.3   UPDATE)
+ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   TAG 1.6.1   UPDATE)
+ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.13.3   UPDATE)
+ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 5a031aa0f13db32bc2a0835a0ac9fa60c4f4ec75   UPDATE)
 
 ecbuild_bundle_finalize()
 EOF

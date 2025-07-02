@@ -2,6 +2,8 @@
 
 set -e
 
+src_dir=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+
 
 
 # --- parse arguments
@@ -183,7 +185,7 @@ ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"  
 ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.29.3   UPDATE)
 ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   TAG 1.6.1   UPDATE)
 ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.13.3   UPDATE)
-ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 5a031aa0f13db32bc2a0835a0ac9fa60c4f4ec75   UPDATE)
+ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 5b1e5d2a434e6f74954ecea15c713bf38ae2d908   UPDATE)
 
 ecbuild_bundle_finalize()
 EOF
@@ -197,20 +199,13 @@ if [ ! -e $fdb_dir ] || [[ "$rebuild" == "true" ]] ; then
   mkdir -p $fdb_build_dir
   cd $fdb_build_dir
   export PATH=$PATH:${git_dir}/ecbuild/bin
-  cmake ${git_dir}/fdb-bundle -DENABLE_MEMFS=ON -DENABLE_AEC=OFF ${build_flags}
+  cmake ${git_dir}/fdb-bundle -DENABLE_MEMFS=ON -DENABLE_AEC=ON ${build_flags}
 
   cmake --build . -j 12
   mkdir -p $fdb_dir
   cmake --install . --prefix $fdb_dir
   cd $root/install
   tar -zcvf fdb-bundle.tar.gz fdb-bundle
-fi
-
-# --- daos-tests (for seed GRIB files)
-
-if [ ! -e $git_dir/daos-tests ] ; then
-  cd $git_dir
-  git clone https://github.com/ecmwf-projects/daos-tests
 fi
 
 # --- FDB client config
@@ -281,6 +276,11 @@ store: remote
 EOF
 
 fi
+
+cp ${src_dir}/artifacts/${backend}/schema ${root}/schema
+
+cp ${src_dir}/artifacts/sample1MiB ${root}/sample1MiB
+
 
 
 cd $cwd

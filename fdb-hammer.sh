@@ -238,8 +238,8 @@ nodes_read_itt=
 # --- copy artifacts
 
 artifacts=( \
-  "$root/git/daos-tests/ngio/fdb_hammer/sample1MiB" \
-  "$root/git/daos-tests/ngio/fdb_hammer/schema_posix" \
+  "$root/sample1MiB" \
+  "$root/schema" \
   "$config" \
 )
 

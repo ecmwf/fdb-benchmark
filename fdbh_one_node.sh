@@ -394,7 +394,7 @@ function client {
 test_src_dir=${artifact_dir}
 
 cp $test_src_dir/sample1MiB $tmp_dir/sample1MiB
-cp $test_src_dir/schema_posix $tmp_dir/schema
+cp $test_src_dir/schema $tmp_dir/schema
 cp $test_src_dir/config.yaml.in $tmp_dir/config.yaml
 sed -i -e "s#@SCHEMA_PATH@#${tmp_dir}/schema#" $tmp_dir/config.yaml
 

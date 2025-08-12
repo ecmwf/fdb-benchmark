@@ -404,6 +404,9 @@ sed -i -e "s#@SCHEMA_PATH@#${tmp_dir}/schema#" $tmp_dir/config.yaml
 export FDB_SCHEMA_FILE=${tmp_dir}/schema
 #export FDB_ASYNC_WRITE=1
 
+export FDB_HAMMER_RUN_PATH=/tmp/${USER}
+mkdir -p $FDB_HAMMER_RUN_PATH
+
 procs_to_run=$ppn
 [[ "$mode" == "list" ]] && procs_to_run=1
 

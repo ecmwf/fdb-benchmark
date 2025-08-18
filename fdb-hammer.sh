@@ -238,7 +238,7 @@ nodes_read_itt=
 # --- copy artifacts
 
 artifacts=( \
-  "$root/sample1MiB" \
+  "$root/sample_field" \
   "$root/schema" \
   "$config" \
 )
@@ -323,10 +323,12 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
   if [ "$NSTEPS" -lt "$num_nodes_read_itt" ] ; then
     (( "$num_nodes_read_itt" % "$NSTEPS" != 0 )) && \
       echo "num reader nodes must be divisible by nsteps if nsteps < num reader nodes" && \
+      echo "read aborted" && \
       exit 1
   else
     (( "$NSTEPS" % "$num_nodes_read_itt" != 0 )) && \
       echo "NSTEPS must be a multiple of num reader nodes if NSTEPS >= num reader nodes" && \
+      echo "read aborted" && \
       exit 1
   fi
 

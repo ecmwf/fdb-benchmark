@@ -185,7 +185,7 @@ ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"  
 ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.29.3   UPDATE)
 ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   TAG 1.6.1   UPDATE)
 ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.13.3   UPDATE)
-ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 8a1de335612033ef72f359b3ab5370db46562025 UPDATE)
+ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG f6f2f53c4433f8b6b0dc8eb54a396c22b0f03753 UPDATE)
 
 ecbuild_bundle_finalize()
 EOF
@@ -279,7 +279,7 @@ fi
 
 cp ${src_dir}/artifacts/${backend}/schema ${root}/schema
 
-cp ${src_dir}/artifacts/sample1MiB ${root}/sample1MiB
+cp ${src_dir}/artifacts/sample4.175MiB_ccsds ${root}/sample_field
 
 
 

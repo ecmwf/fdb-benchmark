@@ -302,7 +302,7 @@ function client {
   if [[ "$mode" == "list" ]] ; then
 
     out=$(taskset -c $pin_proc $fdb_hammer \
-            $tmp_dir/sample1MiB \
+            $tmp_dir/sample_field \
             --list \
             --class=rd \
             --expver=xxxx \
@@ -330,7 +330,7 @@ function client {
 
       for step in "${steps[@]}" ; do
         out="${out}\n$(taskset -c $pin_proc $fdb_hammer \
-                $tmp_dir/sample1MiB \
+                $tmp_dir/sample_field \
                 $mode_arg \
                 --itt \
                 --poll-period=$poll_period \
@@ -359,7 +359,7 @@ function client {
 
 
       out=$(taskset -c $pin_proc $fdb_hammer \
-              $tmp_dir/sample1MiB \
+              $tmp_dir/sample_field \
               $mode_arg \
               $itt_arg \
               --class=rd \
@@ -393,7 +393,7 @@ function client {
 
 test_src_dir=${artifact_dir}
 
-cp $test_src_dir/sample1MiB $tmp_dir/sample1MiB
+cp $test_src_dir/sample_field $tmp_dir/sample_field
 cp $test_src_dir/schema $tmp_dir/schema
 cp $test_src_dir/config.yaml.in $tmp_dir/config.yaml
 sed -i -e "s#@SCHEMA_PATH@#${tmp_dir}/schema#" $tmp_dir/config.yaml

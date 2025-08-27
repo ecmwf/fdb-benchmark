@@ -399,7 +399,8 @@ cp $test_src_dir/config.yaml.in $tmp_dir/config.yaml
 sed -i -e "s#@SCHEMA_PATH@#${tmp_dir}/schema#" $tmp_dir/config.yaml
 
 #export FDB_ROOT_DIRECTORY=${fdb_root}
-#export FDB_DATA_LUSTRE_STRIPE_COUNT=24
+#export FDB_DATA_LUSTRE_STRIPE_COUNT=1
+#export FDB_DATA_LUSTRE_STRIPE_SIZE=1048576
 
 export FDB_SCHEMA_FILE=${tmp_dir}/schema
 #export FDB_ASYNC_WRITE=1

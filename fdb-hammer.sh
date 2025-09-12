@@ -8,6 +8,7 @@ nmembers=default
 NSTEPS=10
 NLEVELS=1
 NPARAMS=1
+fields_per_member_per_step=
 root="$HOME/fdb-hammer-parallel"
 config=
 prolog_script=none
@@ -21,6 +22,8 @@ itt=no
 barrier_port=7777
 barrier_max_wait=10
 poll_period=1
+step_window=10
+random_delay=100
 nodelist_read_itt_arg=
 ppn_read_itt=
 
@@ -37,13 +40,16 @@ Available options:\n\n\
 --nodelist <list>\n\nNode list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[001-010]. Do not use 'localhost' in this list, use the local host name if needed. Default: a list containing the local host name only (as provided by hostname).\n\n\
 --ppn <ppn>\n\nNumber of fdb-hammer processes to run on every client node in the provided node list. Default: 1.\n\n\
 --nmembers <nmembers>\n\nTotal number of members to archive/retrieve by all client nodes and process. It must be a multiple or submultiple of the number of nodes in the nodelist. If larger than the number of nodes, a node will produce/consume data for more than one member. If smaller, multiple nodes will produce/consume data for a same member. Default: one per node in --nodelist (this default behaviour can be triggered by providing no value or with --nmembers default).\n\n\
---nsteps <nsteps>\n\nNumber of steps to archive/retrieve by every client process. Default: 10.\n\n\
---nlevels <nlevels>\n\nNumber of levels to archive/retrieve by every client process. Default: 1.\n\n\
---nparams <nparams>\n\nNumber of params to archive/retrieve by every client process. Default: 1.\n\n\
+--nsteps <nsteps>\n\nNumber of steps to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for steps 1 to nsteps. Default: 10.\n\n\
+--nlevels <nlevels>\n\nNumber of levels to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', every parallel process in a member archives nlevels unique levels. Default: 1.\n\n\
+--nparams <nparams>\n\nNumber of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params. Default: 1.\n\n\
+--fields-per-member-per-step <nfields>\n\nNumber of fields to archive (if MODE is 'write') or archived (if MODE is 'read') per step by all writer processes of a member. This argument overrides --nlevels, and is equivalent to supplying --nlevels=(nfields / --nparams / --ppn / (length(--nodelist) / --nmembers)).\n\n\
 --itt\n\nFlag to enable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.\n\n\
 --barrier-port <port>\n\nIf --itt is specified and MODE is 'write', the port specified in --port will be used on the first writer node to listen for peer nodes to barrier. Default: 7777.\n\n\
 --barrier-max-wait <seconds>\n\nIf --itt is specified and MODE is 'write', --barrier-max-write deterimnes the number of seconds to wait for peer nodes during barriers before aborting. Default: 10.\n\n\
 --poll-period <period>\n\nIf --itt is specified, --poll-period deterimnes the number of seconds between polling retries in reader processes. Default: 1.\n\n\
+--step-window <seconds>\n\nIf --itt is specified and MODE is 'write', --step-window deterimnes the number of seconds allowed per writer process to perform the I/O for a step. If this amount of time is not consumed during I/O, the process sleeps until it is fully consumed. If the window is exceeded, the process errors. Default: 10.\n\n\
+--random-delay <percent>\n\nIf --itt is specified and MODE is 'write', every writer process sleeps for a random amount of time between 0 and (--step-window * percent / 100) before starting I/O. Default: 100.\n\n\
 --nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
 --ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
 --root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-hammer-parallel.\n\n\
@@ -89,6 +95,11 @@ Available options:\n\n\
     shift
     shift
     ;;
+    --fields-per-member-per-step)
+    fields_per_member_per_step="$2"
+    shift
+    shift
+    ;;
     --itt)
     itt=yes
     shift
@@ -105,6 +116,16 @@ Available options:\n\n\
     ;;
     --poll-period)
     poll_period="$2"
+    shift
+    shift
+    ;;
+    --step-window)
+    step_window="$2"
+    shift
+    shift
+    ;;
+    --random-delay)
+    random_delay="$2"
     shift
     shift
     ;;
@@ -314,6 +335,16 @@ fi
 
 
 
+# --- apply fields-per-member-per-step if supplied
+
+if [[ ! -z "$fields_per_member_per_step" ]] ; then
+    NLEVELS=$( python3 <<EOF
+from math import ceil
+print(ceil($fields_per_member_per_step / $NPARAMS / $ppn / ($num_nodes / $nmembers)))
+EOF
+)
+fi
+
 if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   # --- sanity check steps and reader procs if --itt read
@@ -407,7 +438,7 @@ for node in "${nodes[@]}" ; do
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
     $check $install $artifact_dir $artifact_dir_is_shared $prolog_script $verbose \
-    $itt $barrier_port $barrier_max_wait $nodelist_read_itt $ppn_read_itt \
+    $itt $step_window $random_delay $barrier_port $barrier_max_wait $nodelist_read_itt $ppn_read_itt \
     $poll_period \
   )
 

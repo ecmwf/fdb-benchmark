@@ -35,8 +35,8 @@ mkdir -p $TMPDIR
 
 # --- allocate compute nodes
 
-NWRITERS=16
-NREADERS=16
+NWRITERS=18
+NREADERS=18
 NALL=$(( NWRITERS + NREADERS ))
 salloc -N $NALL -n $NALL --exclusive --no-shell
 
@@ -70,23 +70,36 @@ rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
 
 # --- run contending writers and readers
 
+# processes per writer node
+ppn=8
+# nodes per member
+npm=6
+
 ./fdb-hammer.sh write \
-    --nodelist $WRITERS --ppn 128 \
-    --nodelist-read $READERS --ppn-read 128 \
-    --nmembers default --nsteps 64 --nlevels 50 --nparams 5 \
-    --itt --barrier-port 7777 --barrier-max-wait 10 --poll-period 10 \
+    --nodelist $WRITERS --ppn $ppn \
+    --nodelist-read $READERS --ppn-read 8 \
+    --nmembers $(( NWRITERS / npm )) --nsteps 108 \
+    --fields-per-member-per-step $(( 150 * 15 )) --nparams 15 \
+    --itt --step-window 10 --random-delay 100 --poll-period 10 \
+    --barrier-port 7777 --barrier-max-wait 10 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     > write.out < /dev/null &
 
+#    --nlevels $(( 150 / ppn / npm )) --nparams 15 \
+
 ./fdb-hammer.sh read \
-    --nodelist $WRITERS --ppn 128 \
-    --nodelist-read $READERS --ppn-read 128 \
-    --nmembers default --nsteps 64 --nlevels 50 --nparams 5 \
-    --itt --barrier-port 7777 --barrier-max-wait 10 --poll-period 10 \
+    --nodelist $WRITERS --ppn $ppn \
+    --nodelist-read $READERS --ppn-read 8 \
+    --nmembers $(( NWRITERS / npm )) --nsteps 108 \
+    --fields-per-member-per-step $(( 150 * 15 )) --nparams 15 \
+    --itt --step-window 10 --random-delay 100 --poll-period 10 \
+    --barrier-port 7777 --barrier-max-wait 10 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     > read.out < /dev/null &
+
+#    --nlevels $(( 150 / ppn / npm )) --nparams 15 \
 
 wait
 

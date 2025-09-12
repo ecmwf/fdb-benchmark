@@ -13,12 +13,14 @@ artifact_dir_is_shared=${12}
 prolog_script=${13}
 verbose=${14}
 itt=${15:-no}
-barrier_port=${16:-}
-barrier_max_wait=${17:-}
-nodes_read=${18:-}
-ppn_read=${19:-}
-poll_period=${20:-}
-level_list=${21:-}
+step_window=${16:-}
+random_delay=${17:-}
+barrier_port=${18:-}
+barrier_max_wait=${19:-}
+nodes_read=${20:-}
+ppn_read=${21:-}
+poll_period=${22:-}
+level_list=${23:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -271,7 +273,7 @@ function client {
 
         procs_per_member=$(( ppn * nodes_per_member ))
         procs_per_db=$(( procs_per_member / ndatabases ))
-        member_proc_i=$( (ppn * (I % nodes_per_member) + i ))
+        member_proc_i=$(( ppn * (I % nodes_per_member) + i ))
         database=$(( member_proc_i / procs_per_db ))
 
         database_proc_i=$(( member_proc_i % procs_per_db ))
@@ -355,8 +357,7 @@ function client {
     else
 
       itt_arg=
-      [[ "$itt" == "yes" ]] && itt_arg="--itt --ppn=${ppn} --nodes=${nodes} --barrier-port=${barrier_port} --barrier-max-wait=${barrier_max_wait}"
-
+      [[ "$itt" == "yes" ]] && itt_arg="--itt --ppn=${ppn} --nodes=${nodes} --step-window=${step_window} --random-delay=${random_delay} --barrier-port=${barrier_port} --barrier-max-wait=${barrier_max_wait}"
 
       out=$(taskset -c $pin_proc $fdb_hammer \
               $tmp_dir/sample_field \

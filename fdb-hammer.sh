@@ -371,12 +371,11 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
   if [ "$num_nodes_write" -gt "$nmembers" ] ; then
     nodes_per_member=$(( num_nodes_write / nmembers ))
     procs_per_member=$(( ppn * nodes_per_member ))
-    written_levels_per_step=$(( NLEVELS * ppn * nodes_per_member ))
   else
     members_per_node=$(( nmembers / num_nodes_write ))
     procs_per_member=$(( ppn / members_per_node ))
-    written_levels_per_step=$(( NLEVELS * ppn / members_per_node ))
   fi
+  written_levels_per_step=$(( NLEVELS * procs_per_member ))
   fields_per_step_per_member=$(( procs_per_member * NLEVELS * NPARAMS ))
 
   (( "$fields_per_step_per_member" % "$reader_procs_per_step" != 0 )) && \
@@ -387,7 +386,7 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   # --- generate lists of randomly ordered levels for each reader node
 
-  # This code assumes every reader node will read data for only one step.
+  # This code assumes every reader node will read data for only one step at a time.
   # One list of randomly ordered levels is passed as input to every reader node.
   # If the benchmark is configured with more reader nodes than steps, and therefore
   # multiple reader nodes read data for the same step, the reader nodes for a given

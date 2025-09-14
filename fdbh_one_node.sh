@@ -230,10 +230,10 @@ function client {
 
     if [ "$num_nodes_write" -lt "$nmembers" ] ; then
       members_per_node=$(( nmembers / num_nodes_write ))
-      written_levels_per_step=$(( nlevels * ppn / members_per_node ))
+      written_levels_per_step=$(( nlevels * ppn_write / members_per_node ))
     else
       nodes_per_member=$(( num_nodes_write / nmembers ))
-      written_levels_per_step=$(( nlevels * ppn * nodes_per_member ))
+      written_levels_per_step=$(( nlevels * ppn_write * nodes_per_member ))
     fi
 
     if [ "$num_nodes" -gt "$nsteps" ] ; then
@@ -246,7 +246,7 @@ function client {
         database=$(( step_proc_i / procs_per_db ))
 
         database_proc_i=$(( step_proc_i % procs_per_db ))
-        levels_per_reader_proc=$(( written_levels_per_step / nodes_per_step / ppn ))
+        levels_per_reader_proc=$(( written_levels_per_step / procs_per_step ))
         level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
     else
         steps_per_node=$(( nsteps / num_nodes ))
@@ -258,13 +258,12 @@ function client {
         database=$(( step_proc_i / procs_per_db ))
 
         database_proc_i=$(( step_proc_i % procs_per_db ))
-        levels_per_reader_proc=$(( written_levels_per_step / ppn ))
+        levels_per_reader_proc=$(( written_levels_per_step / procs_per_step ))
         level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
     fi
 
-    levels=( "${levelist[@]:$(( level - 1 )):${levels_per_reader_proc}}" )
-    levels=$(echo "${levels[@]}" | tr -s ' ' ',')
-
+    levels_subset=( "${levelist[@]:$(( level - 1 )):${levels_per_reader_proc}}" )
+    levels=$(echo "${levels_subset[@]}" | tr -s ' ' ',')
   else
 
     if [ "$num_nodes" -gt "$nmembers" ] ; then

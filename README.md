@@ -72,14 +72,14 @@ rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
 
 # processes per writer node
 ppn=8
-# nodes per member
+# writer nodes per member
 npm=6
 
 ./fdb-hammer.sh write \
     --nodelist $WRITERS --ppn $ppn \
-    --nodelist-read $READERS --ppn-read 8 \
-    --nmembers $(( NWRITERS / npm )) --nsteps 108 \
-    --fields-per-member-per-step $(( 150 * 15 )) --nparams 15 \
+    --nodelist-read $READERS --ppn-read 16 \
+    --nmembers $(( NWRITERS / npm )) --nsteps 16 \
+    --fields-per-member-per-step $(( 160 * 16 )) --nparams 16 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
     --barrier-port 7777 --barrier-max-wait 10 \
     --root $build_root --config $build_root/config.yaml.in \
@@ -90,9 +90,9 @@ npm=6
 
 ./fdb-hammer.sh read \
     --nodelist $WRITERS --ppn $ppn \
-    --nodelist-read $READERS --ppn-read 8 \
-    --nmembers $(( NWRITERS / npm )) --nsteps 108 \
-    --fields-per-member-per-step $(( 150 * 15 )) --nparams 15 \
+    --nodelist-read $READERS --ppn-read 16 \
+    --nmembers $(( NWRITERS / npm )) --nsteps 16 \
+    --fields-per-member-per-step $(( 160 * 16 )) --nparams 16 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
     --barrier-port 7777 --barrier-max-wait 10 \
     --root $build_root --config $build_root/config.yaml.in \
@@ -107,16 +107,16 @@ rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
 
 # --- checklist after a benchmark run hangs or terminates abruptly
 
+# list active writer/reader processes on the compute nodes
+clush -w $ALL "ps -aux | grep '^$USER ' | wc -l"
+# if any, kill as follows
+#clush -w $ALL "ps -aux | grep 'fdb-hammer ' | awk '{print \$2}' | xargs -I{} kill {}"
+#clush -w $ALL "ps -aux | grep 'bash -s ' | awk '{print \$2}' | xargs -I{} kill {}"
+
 # list active orchestrating processes on the login/orchestrating node
 ps -aux | grep fdb-hammer.sh
 # if any, kill as follows
 #ps -aux | grep fdb-hammer.sh | awk '{print $2}' | xargs -I{} kill {}
-
-# list active writer/reader processes on the compute nodes
-clush -w $ALL "ps -aux | grep '^$USER ' | wc -l"
-# if any, kill as follows
-#clush -w $ALL "ps -aux | grep 'bash -s ' | awk '{print \$2}' | xargs -I{} kill {}"
-#clush -w $ALL "ps -aux | grep 'fdb-hammer ' | awk '{print \$2}' | xargs -I{} kill {}"
 
 # list leftover lock files in the compute nodes
 clush -w $ALL 'ls /tmp/$USER/'

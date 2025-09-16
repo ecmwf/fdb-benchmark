@@ -9,6 +9,7 @@ NSTEPS=10
 NLEVELS=1
 NPARAMS=1
 fields_per_member_per_step=
+read_nodes_per_step=default
 root="$HOME/fdb-hammer-parallel"
 config=
 prolog_script=none
@@ -45,6 +46,7 @@ Available options:\n\n\
 --nparams <nparams>\n\nNumber of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params. Default: 1.\n\n\
 --fields-per-member-per-step <nfields>\n\nNumber of fields to archive (if MODE is 'write') or archived (if MODE is 'read') per step by all writer processes of a member. This argument overrides --nlevels, and is equivalent to supplying --nlevels=(nfields / --nparams / --ppn / (length(--nodelist) / --nmembers)).\n\n\
 --itt\n\nFlag to enable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.\n\n\
+--read-nodes-per-step <nnodes>\n\nIf --itt is specified and MODE is 'read', --read-nodes-per-step determines the number of reader nodes to employ for reading data for every written step. It must be equal or smaller than the number of nodes in --nodelist-read. If smaller, it must be a divisor. Default: one node in --nodelist-read per step if --nsteps is greater than or equal to the number of nodes in the nodelist, or length(--nodelist-read) / --nsteps otherwise (this default behaviour can be triggered by providing no value or with --read-nodes-per-step default).\n\n
 --barrier-port <port>\n\nIf --itt is specified and MODE is 'write', the port specified in --port will be used on the first writer node to listen for peer nodes to barrier. Default: 7777.\n\n\
 --barrier-max-wait <seconds>\n\nIf --itt is specified and MODE is 'write', --barrier-max-write deterimnes the number of seconds to wait for peer nodes during barriers before aborting. Default: 10.\n\n\
 --poll-period <period>\n\nIf --itt is specified, --poll-period deterimnes the number of seconds between polling retries in reader processes. Default: 1.\n\n\
@@ -102,6 +104,11 @@ Available options:\n\n\
     ;;
     --itt)
     itt=yes
+    shift
+    ;;
+    --read-nodes-per-step)
+    read_nodes_per_step="$2"
+    shift
     shift
     ;;
     --barrier-port)
@@ -350,22 +357,22 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
   # --- sanity check steps and reader procs if --itt read
 
   num_nodes_read_itt=${#nodes_read_itt[@]}
-  
+
   if [ "$NSTEPS" -lt "$num_nodes_read_itt" ] ; then
     (( "$num_nodes_read_itt" % "$NSTEPS" != 0 )) && \
       echo "num reader nodes must be divisible by nsteps if nsteps < num reader nodes" && \
       echo "read aborted" && \
       exit 1
+    [[ "$read_nodes_per_step" == "default" ]] && read_nodes_per_step=$(( num_nodes_read_itt / NSTEPS ))
   else
     (( "$NSTEPS" % "$num_nodes_read_itt" != 0 )) && \
       echo "NSTEPS must be a multiple of num reader nodes if NSTEPS >= num reader nodes" && \
       echo "read aborted" && \
       exit 1
+    [[ "$read_nodes_per_step" == "default" ]] && read_nodes_per_step=1
   fi
 
-  reader_procs_per_step=$ppn_read_itt
-  [ "$NSTEPS" -lt "$num_nodes_read_itt" ] && \
-    reader_procs_per_step=$(( ppn_read_itt * num_nodes_read_itt / NSTEPS ))
+  reader_procs_per_step=$(( ppn_read_itt * read_nodes_per_step ))
 
   num_nodes_write=${#nodes_write_or_read[@]}
   if [ "$num_nodes_write" -gt "$nmembers" ] ; then
@@ -386,24 +393,27 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   # --- generate lists of randomly ordered levels for each reader node
 
-  # This code assumes every reader node will read data for only one step at a time.
   # One list of randomly ordered levels is passed as input to every reader node.
-  # If the benchmark is configured with more reader nodes than steps, and therefore
+  # If the benchmark is configured with read_nodes_per_step > 1, and therefore
   # multiple reader nodes read data for the same step, the reader nodes for a given
-  # step will all receive the same list of levels and each node will extract a 
+  # step will all receive the same list of levels and each node will extract a
   # different subset of levels from the provided list.
-  # If the benchmark is configured with less reader nodes than steps, and therefore
-  # a reader node reads data for multiple steps, the same list of randomly ordered
-  # levels provided as input is used for all steps. Because each reader node will 
-  # read its assigned steps with a stride of #number_of_reader nodes, and each 
-  # reader process reads parameters in a different order, the read order for every 
-  # subsequent step read (both overall and within a reader node) will be different.
+  # If the benchmark is configured with less reader nodes than steps * read_nodes_per_step,
+  # and therefore reader nodes read data for multiple steps, the same list of randomly
+  # ordered levels provided as input to a reader node is used for all of its steps.
+  # Because each reader node will read its assigned steps with a stride of
+  # #number_of_reader nodes, and each reader process reads parameters in a different order,
+  # the read order for every subsequent step read (both overall and within a reader node)
+  # will be different.
 
   level_lists=()
 
-  for node in `seq 1 $num_nodes_read_itt` ; do
+  max_read_jobs=$(( num_nodes_read_itt / read_nodes_per_step ))
+  for job in `seq 1 $max_read_jobs` ; do
     list=($(seq 1 $written_levels_per_step | shuf))
-    level_lists+=( $(echo "${list[@]}" | tr -s ' ' ',') )
+    for node in `seq 1 $read_nodes_per_step` ; do
+      level_lists+=( $(echo "${list[@]}" | tr -s ' ' ',') )
+    done
   done
 
 fi
@@ -437,7 +447,8 @@ for node in "${nodes[@]}" ; do
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
     $check $install $artifact_dir $artifact_dir_is_shared $prolog_script $verbose \
-    $itt $step_window $random_delay $barrier_port $barrier_max_wait $nodelist_read_itt $ppn_read_itt \
+    $itt $step_window $random_delay $barrier_port $barrier_max_wait \
+    $nodelist_read_itt $read_nodes_per_step $ppn_read_itt \
     $poll_period \
   )
 

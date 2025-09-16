@@ -18,9 +18,10 @@ random_delay=${17:-}
 barrier_port=${18:-}
 barrier_max_wait=${19:-}
 nodes_read=${20:-}
-ppn_read=${21:-}
-poll_period=${22:-}
-level_list=${23:-}
+read_nodes_per_step=${21:-}
+ppn_read=${22:-}
+poll_period=${23:-}
+level_list=${24:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -205,6 +206,7 @@ function client {
   local nlevels=$NLEVELS
   local nparams=$NPARAMS
   local nmembers=$nmembers
+  local read_nodes_per_step=$read_nodes_per_step
   local ndatabases=1
 
   local nodes_per_member=
@@ -236,34 +238,21 @@ function client {
       written_levels_per_step=$(( nlevels * ppn_write * nodes_per_member ))
     fi
 
-    if [ "$num_nodes" -gt "$nsteps" ] ; then
-        nodes_per_step=$(( num_nodes / nsteps ))
-        steps=( $(( I / nodes_per_step )) )
+    nodes_per_step=$read_nodes_per_step
+    steps=( $(seq $(( I % nodes_per_step )) $(( num_nodes / nodes_per_step )) $(( nsteps - 1 )) ) )
 
-        procs_per_step=$(( ppn * nodes_per_step ))
-        procs_per_db=$(( procs_per_step / ndatabases ))
-        step_proc_i=$(( ppn * (I % nodes_per_step) + i ))
-        database=$(( step_proc_i / procs_per_db ))
+    procs_per_step=$(( ppn * nodes_per_step ))
+    procs_per_db=$(( procs_per_step / ndatabases ))
+    step_proc_i=$(( ppn * (I % nodes_per_step) + i ))
+    database=$(( step_proc_i / procs_per_db ))
 
-        database_proc_i=$(( step_proc_i % procs_per_db ))
-        levels_per_reader_proc=$(( written_levels_per_step / procs_per_step ))
-        level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
-    else
-        steps_per_node=$(( nsteps / num_nodes ))
-        steps=( $(seq $I $num_nodes $(( nsteps - 1 )) ) )
-
-        procs_per_step=$ppn
-        procs_per_db=$(( procs_per_step / ndatabases ))
-        step_proc_i=$(( i % procs_per_step ))
-        database=$(( step_proc_i / procs_per_db ))
-
-        database_proc_i=$(( step_proc_i % procs_per_db ))
-        levels_per_reader_proc=$(( written_levels_per_step / procs_per_step ))
-        level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
-    fi
+    database_proc_i=$(( step_proc_i % procs_per_db ))
+    levels_per_reader_proc=$(( written_levels_per_step / procs_per_step ))
+    level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
 
     levels_subset=( "${levelist[@]:$(( level - 1 )):${levels_per_reader_proc}}" )
     levels=$(echo "${levels_subset[@]}" | tr -s ' ' ',')
+
   else
 
     if [ "$num_nodes" -gt "$nmembers" ] ; then

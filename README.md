@@ -81,6 +81,7 @@ npm=6
     --nmembers $(( NWRITERS / npm )) --nsteps 16 \
     --fields-per-member-per-step $(( 160 * 16 )) --nparams 16 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
+    --read-nodes-per-step 2 \
     --barrier-port 7777 --barrier-max-wait 10 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
@@ -94,6 +95,7 @@ npm=6
     --nmembers $(( NWRITERS / npm )) --nsteps 16 \
     --fields-per-member-per-step $(( 160 * 16 )) --nparams 16 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
+    --read-nodes-per-step 2 \
     --barrier-port 7777 --barrier-max-wait 10 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \

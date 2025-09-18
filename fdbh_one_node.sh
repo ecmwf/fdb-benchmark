@@ -13,15 +13,16 @@ artifact_dir_is_shared=${12}
 prolog_script=${13}
 verbose=${14}
 itt=${15:-no}
-step_window=${16:-}
-random_delay=${17:-}
-barrier_port=${18:-}
-barrier_max_wait=${19:-}
-nodes_read=${20:-}
-read_nodes_per_step=${21:-}
-ppn_read=${22:-}
-poll_period=${23:-}
-level_list=${24:-}
+member_delay=${16:-}
+step_window=${17:-}
+random_delay=${18:-}
+barrier_port=${19:-}
+barrier_max_wait=${20:-}
+nodes_read=${21:-}
+read_nodes_per_step=${22:-}
+ppn_read=${23:-}
+poll_period=${24:-}
+level_list=${25:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -208,6 +209,7 @@ function client {
   local nmembers=$nmembers
   local read_nodes_per_step=$read_nodes_per_step
   local ndatabases=1
+  local member_delay=$member_delay
 
   local nodes_per_member=
   local members_per_node=
@@ -239,7 +241,7 @@ function client {
     fi
 
     nodes_per_step=$read_nodes_per_step
-    steps=( $(seq $(( I % nodes_per_step )) $(( num_nodes / nodes_per_step )) $(( nsteps - 1 )) ) )
+    steps=( $(seq $(( I / nodes_per_step )) $(( num_nodes / nodes_per_step )) $(( nsteps - 1 )) ) )
 
     procs_per_step=$(( ppn * nodes_per_step ))
     procs_per_db=$(( procs_per_step / ndatabases ))
@@ -285,6 +287,9 @@ function client {
   local fdb_read=${artifact_dir}/fdb-bundle/bin/fdb-read
 
   # run fdb-hammer
+
+  # reproduce delay among members if ITT write
+  [[ "$itt" == "yes" ]] && [[ "$mode" == "write" ]] && sleep $(( member_delay * ( number - 1 ) ))
 
   verbose_arg=
   [[ "$verbose" == "yes" ]] && verbose_arg="--verbose"

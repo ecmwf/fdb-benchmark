@@ -451,6 +451,8 @@ i=0
 
 [[ "$mode" == "list" ]] && nodelist=${nodes_write_or_read[0]} && nodes=( ${nodelist} ) && ppn=1
 
+start_time=$(date +%s)
+
 for node in "${nodes[@]}" ; do
 
   args=( \
@@ -488,6 +490,8 @@ for pid in "${pids[@]}" ; do
 
 done
 
+end_time=$(date +%s)
+
 echo Done
 
 
@@ -501,9 +505,18 @@ consistency_failures=0
 first_ts=$(cat "${outs[@]}" | grep "Timestamp before first IO" | awk '{print $5}' | sort -n | head -n 1)
 last_ts=$(cat "${outs[@]}" | grep "Timestamp after last IO" | awk '{print $5}' | sort -nr | head -n 1)
 
-field_size_mb=1
+field_size_mb=4.175
 num_nodes=${#nodes[@]}
 bw=$(bc <<< "$num_nodes * $ppn * $NSTEPS * $NLEVELS * $NPARAMS * $field_size_mb / ($last_ts - $first_ts)")
+
+avg_sleep_per_step=0
+[[ "$mode" == "write" ]] && [[ "$itt" == "yes" ]] && \
+  avg_sleep_per_step=$(cat "${outs[@]}" | grep "time slept per step" | awk '{print $6}' | python3 <(cat <<EOF
+import sys
+d = [int(val) for val in sys.stdin.read().split()]
+print(sum(d) / len(d))
+EOF
+))
 
 for out in "${outs[@]}" ; do
 
@@ -514,11 +527,32 @@ for out in "${outs[@]}" ; do
 
 done
 
+echo "----------------"
+
+echo "Start time: $(date --date @${start_time})"
+echo "End time: $(date --date @${end_time})"
+echo "Wall-clock time: $(( end_time - start_time )) s"
+
 if [[ "$mode" != "list" ]] ; then
-  echo "----------------"
-  ( ! ( [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ) ) && \
-    echo "Total ${mode} bandwidth: ${bw} MiB/s"
+
+  note=
+
+  #[[ "$itt" == "yes" ]] && [[ "$mode" == "write" ]] && \
+  #  (( "$step_window" -gt 0 )) && \
+  #  note=" (including --step-window sleeps)"
+
+  [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \
+    note=" (including waiting/polling)"
+
+  echo "Total ${mode} bandwidth${note}: ${bw} MiB/s"
+
+  [[ "$itt" == "yes" ]] && [[ "$mode" == "write" ]] && \
+    echo "Average time slept per step: ${avg_sleep_per_step}"
+
   [ "$failures" -ne 0 ] && echo "Got ${failures} failures" || echo "No failures occurred"
+
   [ "$consistency_failures" -ne 0 ] && echo "Found ${consistency_failures} inconsistencies"
-  echo "----------------"
+
 fi
+
+echo "----------------"

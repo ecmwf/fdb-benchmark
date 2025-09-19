@@ -24,6 +24,7 @@ barrier_port=7777
 barrier_max_wait=10
 poll_period=1
 member_delay=0
+reader_delay=0
 step_window=10
 random_delay=100
 nodelist_read_itt_arg=
@@ -52,6 +53,7 @@ Available options:\n\n\
 --barrier-max-wait <seconds>\n\nIf --itt is specified and MODE is 'write', --barrier-max-write deterimnes the number of seconds to wait for peer nodes during barriers before aborting. Default: 10.\n\n\
 --poll-period <period>\n\nIf --itt is specified, --poll-period deterimnes the number of seconds between polling retries in reader processes. Default: 1.\n\n\
 --member-delay <seconds>\n\nIf --itt is specified and MODE is 'write', writer processes for a given member are launched with a delay of 'seconds' seconds after the processes for the previous member. Decimal numbers supported. Default: 0.\n\n\
+--reader-delay <seconds>\n\nIf --itt is specified and MODE is 'read', reader processes for a given step are launched with a delay of 'seconds' seconds after the processes for the previous step. Decimal numbers supported. Default: 0.\n\n\
 --step-window <seconds>\n\nIf --itt is specified and MODE is 'write', --step-window deterimnes the number of seconds allowed per writer process to perform the I/O for a step. If this amount of time is not consumed during I/O, the process sleeps until it is fully consumed. If the window is exceeded, the process errors. Default: 10.\n\n\
 --random-delay <percent>\n\nIf --itt is specified and MODE is 'write', every writer process sleeps for a random amount of time between 0 and (--step-window * percent / 100) before starting I/O. Default: 100.\n\n\
 --nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
@@ -130,6 +132,11 @@ Available options:\n\n\
     ;;
     --member-delay)
     member_delay="$2"
+    shift
+    shift
+    ;;
+    --reader-delay)
+    reader_delay="$2"
     shift
     shift
     ;;
@@ -458,7 +465,8 @@ for node in "${nodes[@]}" ; do
   args=( \
     $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS \
     $check $install $artifact_dir $artifact_dir_is_shared $prolog_script $verbose \
-    $itt $member_delay $step_window $random_delay $barrier_port $barrier_max_wait \
+    $itt $member_delay $reader_delay $step_window $random_delay \
+    $barrier_port $barrier_max_wait \
     $nodelist_read_itt $read_nodes_per_step $ppn_read_itt \
     $poll_period \
   )

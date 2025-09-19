@@ -14,15 +14,16 @@ prolog_script=${13}
 verbose=${14}
 itt=${15:-no}
 member_delay=${16:-}
-step_window=${17:-}
-random_delay=${18:-}
-barrier_port=${19:-}
-barrier_max_wait=${20:-}
-nodes_read=${21:-}
-read_nodes_per_step=${22:-}
-ppn_read=${23:-}
-poll_period=${24:-}
-level_list=${25:-}
+reader_delay=${17:-}
+step_window=${18:-}
+random_delay=${19:-}
+barrier_port=${20:-}
+barrier_max_wait=${21:-}
+nodes_read=${22:-}
+read_nodes_per_step=${23:-}
+ppn_read=${24:-}
+poll_period=${25:-}
+level_list=${26:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -210,6 +211,7 @@ function client {
   local read_nodes_per_step=$read_nodes_per_step
   local ndatabases=1
   local member_delay=$member_delay
+  local reader_delay=$reader_delay
 
   local nodes_per_member=
   local members_per_node=
@@ -324,6 +326,9 @@ function client {
     if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
       for step in "${steps[@]}" ; do
+
+        [[ "$step" == "${steps[0]}" ]] && sleep $(( reader_delay * step ))
+
         out="${out}\n$(taskset -c $pin_proc $fdb_hammer \
                 $tmp_dir/sample_field \
                 $mode_arg \

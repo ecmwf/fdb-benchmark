@@ -38,6 +38,8 @@ num_nodes=${#nodelist[@]}
 # to shape the workload. The write node list and ppn are still required
 # for shaping the workload but are kept in separate variables.
 
+steps=
+
 if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   nodelist_write=$nodelist
@@ -48,6 +50,9 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   ppn_write=$ppn
   ppn=$ppn_read
+
+  # calculate the list of steps this node must read
+  steps=( $(seq $(( I / read_nodes_per_step )) $(( num_nodes / read_nodes_per_step )) $(( NSTEPS - 1 )) ) )
 
 fi
 
@@ -224,7 +229,6 @@ function client {
   local written_levels_per_step=
   local nodes_per_step=
   local steps_per_node=
-  local steps=
   local procs_per_step=
   local step_proc_i=
   local levels_per_reader_proc=
@@ -242,7 +246,6 @@ function client {
     fi
 
     nodes_per_step=$read_nodes_per_step
-    steps=( $(seq $(( I / nodes_per_step )) $(( num_nodes / nodes_per_step )) $(( nsteps - 1 )) ) )
 
     procs_per_step=$(( ppn * nodes_per_step ))
     procs_per_db=$(( procs_per_step / ndatabases ))
@@ -368,6 +371,9 @@ function client {
                 #--nlevels=$levels_per_reader_proc \
                 #--level=$level \
 
+        # notify the reporter that this process has read step 'step'
+        echo "$step" >&3
+
         # consume read-step-window
         step_end_timestamp=$(( step_timestamp + read_step_window ))
         current_timestamp=$(date +%s)
@@ -417,6 +423,41 @@ function client {
 
 }
 
+function step_end_reporter {
+
+  local done_count=()
+  for step in "${steps[@]}" ; do
+    done_count+=(0)
+  done
+
+  local steps_done=0
+
+  while [ "$steps_done" -lt "${#steps[@]}" ] ; do
+
+    # reads one line from the anonymous pipe into the 'message' variable
+    read -ru 3 message
+
+    # find step counter position in done_count
+    local pos=0
+    local step_id=
+    for step in "${steps[@]}" ; do
+      [[ "$step" == "$message" ]] && step_id=$step && break
+      pos=$(( pos + 1 ))
+    done
+
+    [ -z $step_id ] && echo "Received unexpected step number." && exit 1
+
+    done_count[$pos]=$(( done_count[$pos] + 1 ))
+
+    if [ "${done_count[$pos]}" -eq $ppn ] ; then
+      echo "Step $step_id fully read at $(date +%s)"
+      steps_done=$(( steps_done + 1 ))
+    fi
+
+  done
+
+}
+
 test_src_dir=${artifact_dir}
 
 cp $test_src_dir/sample_field $tmp_dir/sample_field
@@ -433,6 +474,24 @@ export FDB_SCHEMA_FILE=${tmp_dir}/schema
 
 export FDB_HAMMER_RUN_PATH=/tmp/${USER}
 mkdir -p $FDB_HAMMER_RUN_PATH
+
+if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+
+  # --- set up anonymous pipe for workers to signal step end to reporter
+
+  # create a FIFO (named pipe) in tmpfs
+  pipe=$(mktemp -u)
+  mkfifo $pipe
+  # attach it to fd 3
+  exec 3<>$pipe
+  # turn the pipe into an anonymous pipe by removing the file
+  rm $pipe
+
+  # --- fire the reporter
+
+  step_end_reporter &
+
+fi
 
 procs_to_run=$ppn
 [[ "$mode" == "list" ]] && procs_to_run=1

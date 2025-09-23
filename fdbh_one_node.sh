@@ -23,7 +23,9 @@ nodes_read=${22:-}
 read_nodes_per_step=${23:-}
 ppn_read=${24:-}
 poll_period=${25:-}
-level_list=${26:-}
+read_step_window=${26:-}
+read_random_delay=${27:-}
+level_list=${28:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -208,10 +210,7 @@ function client {
   local nlevels=$NLEVELS
   local nparams=$NPARAMS
   local nmembers=$nmembers
-  local read_nodes_per_step=$read_nodes_per_step
   local ndatabases=1
-  local member_delay=$member_delay
-  local reader_delay=$reader_delay
 
   local nodes_per_member=
   local members_per_node=
@@ -290,11 +289,15 @@ function client {
 
   # run fdb-hammer
 
-  # reproduce delay among members if ITT write
-  [[ "$itt" == "yes" ]] && [[ "$mode" == "write" ]] && sleep $(( member_delay * ( number - 1 ) ))
-
-  verbose_arg=
+  local verbose_arg=
   [[ "$verbose" == "yes" ]] && verbose_arg="--verbose"
+
+  local start_timestamp=
+  local step_timestamp=
+  local current_timestamp=
+  local wait_time=
+  local step_end_timestamp=
+  local random_range=
 
   if [[ "$mode" == "list" ]] ; then
 
@@ -325,9 +328,24 @@ function client {
 
     if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
+      start_timestamp=$(date +%s)
+
+      # read-random-delay
+      if [ "$read_random_delay" -gt 0 ] && [ "$read_step_window" -gt 0 ] ; then
+        random_range=$(( ( read_step_window * read_random_delay / 100 ) + 1 ))
+        sleep $(( ( RANDOM % $random_range ) ))
+      fi
+
       for step in "${steps[@]}" ; do
 
+        # reader-delay
         [[ "$step" == "${steps[0]}" ]] && sleep $(( reader_delay * step ))
+
+        # wait until read-step-window due to start
+        step_timestamp=$(( start_timestamp + step * read_step_window ))
+        current_timestamp=$(date +%s)
+        wait_time=$(( step_timestamp - current_timestamp ))
+        [ "$wait_time" -gt 0 ] && sleep $wait_time
 
         out="${out}\n$(taskset -c $pin_proc $fdb_hammer \
                 $tmp_dir/sample_field \
@@ -350,12 +368,21 @@ function client {
                 #--nlevels=$levels_per_reader_proc \
                 #--level=$level \
 
+        # consume read-step-window
+        step_end_timestamp=$(( step_timestamp + read_step_window ))
+        current_timestamp=$(date +%s)
+        wait_time=$(( step_end_timestamp - current_timestamp ))
+        [ "$wait_time" -gt 0 ] && sleep $wait_time
+
       done
 
     else
 
       itt_arg=
       [[ "$itt" == "yes" ]] && itt_arg="--itt --ppn=${ppn} --nodes=${nodes} --step-window=${step_window} --random-delay=${random_delay} --barrier-port=${barrier_port} --barrier-max-wait=${barrier_max_wait}"
+
+      # reproduce delay among members if ITT write
+      [[ "$itt" == "yes" ]] && sleep $(( member_delay * ( number - 1 ) ))
 
       out=$(taskset -c $pin_proc $fdb_hammer \
               $tmp_dir/sample_field \

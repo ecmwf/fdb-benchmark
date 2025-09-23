@@ -371,6 +371,8 @@ function client {
                 #--nlevels=$levels_per_reader_proc \
                 #--level=$level \
 
+        rc=$?
+
         # notify the reporter that this process has read step 'step'
         echo "$step" >&3
 
@@ -379,6 +381,8 @@ function client {
         current_timestamp=$(date +%s)
         wait_time=$(( step_end_timestamp - current_timestamp ))
         [ "$wait_time" -gt 0 ] && sleep $wait_time
+
+        eval [ $rc -eq 0 ]
 
       done
 
@@ -432,6 +436,8 @@ function step_end_reporter {
 
   local steps_done=0
 
+  local message=
+
   while [ "$steps_done" -lt "${#steps[@]}" ] ; do
 
     # reads one line from the anonymous pipe into the 'message' variable
@@ -450,7 +456,7 @@ function step_end_reporter {
     done_count[$pos]=$(( done_count[$pos] + 1 ))
 
     if [ "${done_count[$pos]}" -eq $ppn ] ; then
-      echo "Step $step_id fully read at $(date +%s)"
+      echo "Step $step_id read at $(date +%s)"
       steps_done=$(( steps_done + 1 ))
     fi
 

@@ -543,6 +543,19 @@ print(sum(d) / len(d))
 EOF
 ))
 
+if [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ; then
+
+  step_read_summary=
+
+  for step in `seq 0 $(( NSTEPS - 1 ))` ; do
+    timestamp=$(cat "${outs[@]}" | grep -e "Step $step read at" | \
+      awk '{print $5}' | sort | tail -n 1)
+    step_read_summary="${step_read_summary}Step $step fully read at "
+    step_read_summary="${step_read_summary}$(date --date @$timestamp)\n"
+  done	
+
+fi
+
 for out in "${outs[@]}" ; do
 
   echo $out
@@ -552,7 +565,10 @@ for out in "${outs[@]}" ; do
 
 done
 
-echo "----------------"
+[[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] && \
+  echo -e "$step_read_summary"
+
+echo -e "------- Summary -------"
 
 echo "Start time: $(date --date @${start_time})"
 echo "End time: $(date --date @${end_time})"

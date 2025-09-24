@@ -23,9 +23,11 @@ nodes_read=${22:-}
 read_nodes_per_step=${23:-}
 ppn_read=${24:-}
 poll_period=${25:-}
-read_step_window=${26:-}
-read_random_delay=${27:-}
-level_list=${28:-}
+poll_max_attempts=${26:-}
+read_step_window=${27:-}
+read_random_delay=${28:-}
+prelist=${29:-}
+level_list=${30:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -288,7 +290,8 @@ function client {
   fi
 
   local fdb_hammer=${artifact_dir}/fdb-bundle/bin/fdb-hammer
-  local fdb_read=${artifact_dir}/fdb-bundle/bin/fdb-read
+
+  local fdb_list=${artifact_dir}/fdb-bundle/bin/fdb-list
 
   # run fdb-hammer
 
@@ -301,6 +304,9 @@ function client {
   local wait_time=
   local step_end_timestamp=
   local random_range=
+
+  local prelist_fifo=
+  local uris_arg=
 
   if [[ "$mode" == "list" ]] ; then
 
@@ -350,11 +356,67 @@ function client {
         wait_time=$(( step_timestamp - current_timestamp ))
         [ "$wait_time" -gt 0 ] && sleep $wait_time
 
+        if [[ "$prelist" == "true" ]] ; then
+
+          if [[ "$i" == 0 ]] ; then
+
+            local attempts=0
+            local prelist_time=0
+            while [ 1 ] ; do
+              # list all locations for fields to be read by this node
+              local t0=$(date +%s)
+              out=$( ${fdb_list} class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$(( echo $level_list | sed -e 's#,#/#g' )) --location )
+              local tf=$(date +%s)
+              prelist_time=$(( prelist_time + tf - t0 ))
+              attempts=$(( attempts + 1 ))
+
+              # sort by level
+              out=$( echo "$out" | grep URI | sort -t ',' -k 9 )
+
+              # ensure number of fields listed matches nparams*length(levelist)*nmembers
+              local found=$( echo "${out}" | wc -l )
+              local expected=$(( nparams * ${#levelist[@]} * nmembers ))
+              [ $found -gt $expected ] && echo "Listed unexpected number of fields. Expected $expected, found $found." && exit 1
+              [ $found -lt $expected ] && [ $attempts -ge $poll_max_attempts ] && echo "Pre-list maximum attempts ($poll_max_attempts) exceeded." && exit 1
+              [ $found -eq $expected ] && echo "Pre-listing completed." && break
+              sleep $poll_period
+            done
+
+            echo "Duration of $attempts pre-list attempts: $prelist_time s"
+
+            # split URIs in a file per process, respecting the order of levels in the supplied levelist
+            local proc=
+            local lev=
+            for proc in `seq 0 $(( ppn - 1 ))` ; do
+              rm -f $tmp_dir/uris_${proc}
+              for lev in `seq 0 $(( nlevels - 1 ))` ; do
+                echo "${out}" | grep "levelist=${levelist[ $(( proc * nlevels + lev )) ]}" \
+                  awk '{print $2}' | sed -e 's/],/?/g' | sed -e 's/,length=/\&length=/g' | \
+                  sed -e 's/,/ /g' | awk '{print $2}' | sed -e 's/name=//g' | sort -R >> $tmp_dir/uris_${proc}
+              done
+            done
+
+            # notify peer processes listing has completed by opening FIFO for write
+            touch $prelist_fifo
+
+          else
+
+            # wait for leader process to notify list completion by opening FIFO for read
+            timeout 500 cat $prelist_fifo
+            [ $? -ne 0 ] && echo "Timed out waiting for list completion signal." && exit 1
+
+          fi
+
+          uris_arg="--uri-file=${tmp_dir}/uris_${i}"
+
+        fi
+
         out="${out}\n$(taskset -c $pin_proc $fdb_hammer \
                 $tmp_dir/sample_field \
                 $mode_arg \
                 --itt \
                 --poll-period=$poll_period \
+                --poll-max-attempts=$poll_max_attempts \
                 --class=rd \
                 --expver=xxxx \
                 --nsteps=1 \
@@ -363,6 +425,7 @@ function client {
                 --number=1 \
                 --levels=$levels \
                 --nparams=$nparams \
+                $uris_arg \
                 $check_arg \
                 --config=$tmp_dir/config.yaml \
                 ${verbose_arg} \
@@ -496,6 +559,12 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
   # --- fire the reporter
 
   step_end_reporter &
+
+  # create a fifo for process 0 to signal other processes that the pre-list has completed
+  if [[ "$prelist" == "yes" ]] ; then
+    prelist_fifo=$(mktemp -u)
+    mkfifo $prelist_fifo
+  fi
 
 fi
 

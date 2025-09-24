@@ -23,6 +23,7 @@ itt=no
 barrier_port=7777
 barrier_max_wait=10
 poll_period=1
+poll_max_attempts=200
 member_delay=0
 reader_delay=0
 step_window=10
@@ -31,6 +32,7 @@ read_step_window=10
 read_random_delay=0
 nodelist_read_itt_arg=
 ppn_read_itt=
+prelist=no
 
 POSITIONAL=()
 while [[ $# -gt 0 ]] ; do
@@ -50,18 +52,20 @@ Available options:\n\n\
 --nparams <nparams>\n\nNumber of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params. Default: 1.\n\n\
 --fields-per-member-per-step <nfields>\n\nNumber of fields to archive (if MODE is 'write') or archived (if MODE is 'read') per step by all writer processes of a member. This argument overrides --nlevels, and is equivalent to supplying --nlevels=(nfields / --nparams / --ppn / (length(--nodelist) / --nmembers)).\n\n\
 --itt\n\nFlag to enable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.\n\n\
+--nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
+--ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
 --read-nodes-per-step <nnodes>\n\nIf --itt is specified and MODE is 'read', --read-nodes-per-step determines the number of reader nodes to employ for reading data for every written step. It must be equal or smaller than the number of nodes in --nodelist-read. If smaller, it must be a divisor. Default: one node in --nodelist-read per step if --nsteps is greater than or equal to the number of nodes in the nodelist, or length(--nodelist-read) / --nsteps otherwise (this default behaviour can be triggered by providing no value or with --read-nodes-per-step default).\n\n
 --barrier-port <port>\n\nIf --itt is specified and MODE is 'write', the port specified in --port will be used on the first writer node to listen for peer nodes to barrier. Default: 7777.\n\n\
 --barrier-max-wait <seconds>\n\nIf --itt is specified and MODE is 'write', --barrier-max-write deterimnes the number of seconds to wait for peer nodes during barriers before aborting. Default: 10.\n\n\
---poll-period <period>\n\nIf --itt is specified, --poll-period deterimnes the number of seconds between polling retries in reader processes. Default: 1.\n\n\
+--poll-period <period>\n\nIf --itt is specified and MODE is 'read', --poll-period deterimnes the number of seconds between list/polling retries in reader processes. Default: 1.\n\n\
+--poll-max-attempts <attempts>\n\nIf --itt is specified and MODE is 'read', --poll-max-attempts determines the maximum number of list retries before failing. Default: 200.\n\n\
 --member-delay <seconds>\n\nIf --itt is specified and MODE is 'write', writer processes for a given member are launched with a delay of 'seconds' seconds after the processes for the previous member. Decimal numbers supported. Default: 0.\n\n\
 --reader-delay <seconds>\n\nIf --itt is specified and MODE is 'read', reader processes for a given step are launched with a delay of 'seconds' seconds after the processes for the previous step. Decimal numbers supported. Default: 0.\n\n\
 --step-window <seconds>\n\nIf --itt is specified and MODE is 'write', --step-window deterimnes the number of seconds allowed per writer process to perform the I/O for a step. If this amount of time is not consumed during I/O, the process sleeps until it is fully consumed. If the window is exceeded, the process prints a message in stdout. Default: 10.\n\n\
 --random-delay <percent>\n\nIf --itt is specified and MODE is 'write', every writer process sleeps for a random amount of time between 0 and (--step-window * percent / 100) before starting I/O. Default: 100.\n\n\
 --read-step-window <seconds>\n\nIf --itt is specified and MODE is 'read', --read-step-window deterimnes the number of seconds allowed for reader processes for a given step to perform the I/O. If this amount of time is not consumed during I/O, the processes sleep until it is fully consumed. If a process exceeds the window, it prints a message in stdout. Default: 10.\n\n\
 --read-random-delay <percent>\n\nIf --itt is specified and MODE is 'read', every reader process sleeps for a random amount of time between 0 and (--read-step-window * percent / 100) before starting I/O. Default: 0.\n\n\
---nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
---ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
+--prelist\n\nIf --itt is specified and MODE is 'read', this flag enables pre-listing of the locations of all fields to be read by every reader node. The first process in every reader node performs the pre-listing, splits the obtained field locations in as many subsets as --ppn-read, and every reader process is assigned one such subset for direct bulk data retrieval without listing. If this flag is disabled (default) every reader process lists the fields of its assigned subset.\n\n
 --root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-hammer-parallel.\n\n\
 --config <path>\n\nPath to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node. Default: <root>/config.yaml.in.\n\n\
 --prolog-script <path>\n\nPath to a prolog script to be sourced first thing on each node in nodelist, for example to load required modules. Defaults to none.\n\n\
@@ -114,6 +118,16 @@ Available options:\n\n\
     itt=yes
     shift
     ;;
+    --nodelist-read)
+    nodelist_read_itt_arg="$2"
+    shift
+    shift
+    ;;
+    --ppn-read)
+    ppn_read_itt="$2"
+    shift
+    shift
+    ;;
     --read-nodes-per-step)
     read_nodes_per_step="$2"
     shift
@@ -131,6 +145,11 @@ Available options:\n\n\
     ;;
     --poll-period)
     poll_period="$2"
+    shift
+    shift
+    ;;
+    --poll-max-attempts)
+    poll_max_attempts="$2"
     shift
     shift
     ;;
@@ -164,14 +183,8 @@ Available options:\n\n\
     shift
     shift
     ;;
-    --nodelist-read)
-    nodelist_read_itt_arg="$2"
-    shift
-    shift
-    ;;
-    --ppn-read)
-    ppn_read_itt="$2"
-    shift
+    --prelist)
+    prelist=yes
     shift
     ;;
     --root)
@@ -485,7 +498,7 @@ for node in "${nodes[@]}" ; do
     $itt $member_delay $reader_delay $step_window $random_delay \
     $barrier_port $barrier_max_wait \
     $nodelist_read_itt $read_nodes_per_step $ppn_read_itt \
-    $poll_period $read_step_window $read_random_delay \
+    $poll_period $poll_max_attempts $read_step_window $read_random_delay $prelist \
   )
 
   [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] && \

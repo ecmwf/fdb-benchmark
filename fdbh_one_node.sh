@@ -356,7 +356,7 @@ function client {
         wait_time=$(( step_timestamp - current_timestamp ))
         [ "$wait_time" -gt 0 ] && sleep $wait_time
 
-        if [[ "$prelist" == "true" ]] ; then
+        if [[ "$prelist" == "yes" ]] ; then
 
           if [[ "$i" == 0 ]] ; then
 
@@ -365,13 +365,13 @@ function client {
             while [ 1 ] ; do
               # list all locations for fields to be read by this node
               local t0=$(date +%s)
-              out=$( ${fdb_list} class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$(( echo $level_list | sed -e 's#,#/#g' )) --location )
+              out=$( ${fdb_list} class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$( echo $level_list | sed -e 's#,#/#g' ) --location --config=$tmp_dir/config.yaml 2>&1 )
               local tf=$(date +%s)
               prelist_time=$(( prelist_time + tf - t0 ))
               attempts=$(( attempts + 1 ))
 
               # sort by level
-              out=$( echo "$out" | grep URI | sort -t ',' -k 9 )
+              out=$( echo "$out" | grep URI | sort -t ',' -k 11 )
 
               # ensure number of fields listed matches nparams*length(levelist)*nmembers
               local found=$( echo "${out}" | wc -l )
@@ -384,15 +384,29 @@ function client {
 
             echo "Duration of $attempts pre-list attempts: $prelist_time s"
 
-            # split URIs in a file per process, respecting the order of levels in the supplied levelist
+            # split URIs in subsets and write in a file per process, respecting the order of levels in the supplied levelist
             local proc=
             local lev=
+            local lev_uris=
+            local path=
+            local offset=
+            local length=
+            local j=
+            local uri=
             for proc in `seq 0 $(( ppn - 1 ))` ; do
               rm -f $tmp_dir/uris_${proc}
               for lev in `seq 0 $(( nlevels - 1 ))` ; do
-                echo "${out}" | grep "levelist=${levelist[ $(( proc * nlevels + lev )) ]}" \
+                lev_uris=($( echo "${out}" | grep "levelist=${levelist[ $(( proc * nlevels + lev )) ]}" | \
                   awk '{print $2}' | sed -e 's/],/?/g' | sed -e 's/,length=/\&length=/g' | \
-                  sed -e 's/,/ /g' | awk '{print $2}' | sed -e 's/name=//g' | sort -R >> $tmp_dir/uris_${proc}
+                  sed -e 's/,/ /g' | awk '{print $2}' | sed -e 's/name=//g' ))
+                for j in `seq 0 $(( ${#lev_uris[@]} - 1 ))` ; do
+                  uri=${lev_uris[$j]}
+                  path=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $1}' )
+                  offset=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $2}' | sed -e 's/&/ /g' | awk '{print $1}' | sed -e 's/offset=//g' )
+                  length=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $2}' | sed -e 's/&/ /g' | awk '{print $2}' )
+                  lev_uris[$j]="${path}?${length}#${offset}"
+                done
+                printf '%s\n' "${lev_uris[@]}" | sort -R >> $tmp_dir/uris_${proc}
               done
             done
 

@@ -192,6 +192,7 @@ function client {
 
   local failed=0
   local out=
+  local listout=
 
   local prof=
   local prof_sep=
@@ -305,7 +306,6 @@ function client {
   local step_end_timestamp=
   local random_range=
 
-  local prelist_fifo=
   local uris_arg=
 
   if [[ "$mode" == "list" ]] ; then
@@ -365,16 +365,16 @@ function client {
             while [ 1 ] ; do
               # list all locations for fields to be read by this node
               local t0=$(date +%s)
-              out=$( ${fdb_list} class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$( echo $level_list | sed -e 's#,#/#g' ) --location --config=$tmp_dir/config.yaml 2>&1 )
+              listout=$( ${fdb_list} class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$( echo $level_list | sed -e 's#,#/#g' ) --location --config=$tmp_dir/config.yaml 2>&1 )
               local tf=$(date +%s)
               prelist_time=$(( prelist_time + tf - t0 ))
               attempts=$(( attempts + 1 ))
 
               # sort by level
-              out=$( echo "$out" | grep URI | sort -t ',' -k 11 )
+              listout=$( echo "$listout" | grep URI | sort -t ',' -k 11 )
 
               # ensure number of fields listed matches nparams*length(levelist)*nmembers
-              local found=$( echo "${out}" | wc -l )
+              local found=$( echo "${listout}" | wc -l )
               local expected=$(( nparams * ${#levelist[@]} * nmembers ))
               [ $found -gt $expected ] && echo "Listed unexpected number of fields. Expected $expected, found $found." && exit 1
               [ $found -lt $expected ] && [ $attempts -ge $poll_max_attempts ] && echo "Pre-list maximum attempts ($poll_max_attempts) exceeded." && exit 1
@@ -395,8 +395,8 @@ function client {
             local uri=
             for proc in `seq 0 $(( ppn - 1 ))` ; do
               rm -f $tmp_dir/uris_${proc}
-              for lev in `seq 0 $(( nlevels - 1 ))` ; do
-                lev_uris=($( echo "${out}" | grep "levelist=${levelist[ $(( proc * nlevels + lev )) ]}" | \
+              for lev in `seq 0 $(( levels_per_reader_proc - 1 ))` ; do
+                lev_uris=($( echo "${listout}" | grep "levelist=${levelist[ $(( proc * levels_per_reader_proc + lev )) ]}," | \
                   awk '{print $2}' | sed -e 's/],/?/g' | sed -e 's/,length=/\&length=/g' | \
                   sed -e 's/,/ /g' | awk '{print $2}' | sed -e 's/name=//g' ))
                 for j in `seq 0 $(( ${#lev_uris[@]} - 1 ))` ; do
@@ -404,7 +404,7 @@ function client {
                   path=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $1}' )
                   offset=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $2}' | sed -e 's/&/ /g' | awk '{print $1}' | sed -e 's/offset=//g' )
                   length=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $2}' | sed -e 's/&/ /g' | awk '{print $2}' )
-                  lev_uris[$j]="${path}?${length}#${offset}"
+                  lev_uris[$j]="file:${path}?${length}#${offset}"
                 done
                 printf '%s\n' "${lev_uris[@]}" | sort -R >> $tmp_dir/uris_${proc}
               done
@@ -557,6 +557,8 @@ export FDB_SCHEMA_FILE=${tmp_dir}/schema
 
 export FDB_HAMMER_RUN_PATH=/tmp/${USER}
 mkdir -p $FDB_HAMMER_RUN_PATH
+
+prelist_fifo=
 
 if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 

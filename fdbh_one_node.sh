@@ -345,6 +345,7 @@ function client {
         sleep $(( ( RANDOM % $random_range ) ))
       fi
 
+      local step=
       for step in "${steps[@]}" ; do
 
         # reader-delay
@@ -360,22 +361,32 @@ function client {
 
           if [[ "$i" == 0 ]] ; then
 
+            local levels_per_reader_node=$(( written_levels_per_step / read_nodes_per_step ))
+            local first_node_level=$(( ( I % nodes_per_step ) * levels_per_reader_node ))
+            local node_levels=( "${levelist[@]:${first_node_level}:${levels_per_reader_node}}" )
+            local node_levels_str=$( printf '%s/' "${node_levels[@]}" )
+            node_levels_str=${node_levels_str%/}
+
             local attempts=0
             local prelist_time=0
+            local t0=
+            local tf=
             while [ 1 ] ; do
               # list all locations for fields to be read by this node
-              local t0=$(date +%s)
-              listout=$( ${fdb_list} class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$( echo $level_list | sed -e 's#,#/#g' ) --location --config=$tmp_dir/config.yaml 2>&1 )
-              local tf=$(date +%s)
+              t0=$(date +%s)
+              listout=$( ${fdb_list} \
+                class=rd,expver=xxxx,stream=enfo,date=20230713,time=0000,domain=g,step=$step,levelist=$node_levels_str \
+                --location --config=$tmp_dir/config.yaml 2>&1 | grep URI \
+              )
+
+              # ensure number of fields listed matches nparams*length(node_levels)*nmembers
+              local found=$( echo "${listout}" | wc -l )
+              local expected=$(( nparams * ${#node_levels[@]} * nmembers ))
+
+              tf=$(date +%s)
               prelist_time=$(( prelist_time + tf - t0 ))
               attempts=$(( attempts + 1 ))
 
-              # sort by level
-              listout=$( echo "$listout" | grep URI | sort -t ',' -k 11 )
-
-              # ensure number of fields listed matches nparams*length(levelist)*nmembers
-              local found=$( echo "${listout}" | wc -l )
-              local expected=$(( nparams * ${#levelist[@]} * nmembers ))
               [ $found -gt $expected ] && echo "Listed unexpected number of fields. Expected $expected, found $found." && exit 1
               [ $found -lt $expected ] && [ $attempts -ge $poll_max_attempts ] && echo "Pre-list maximum attempts ($poll_max_attempts) exceeded." && exit 1
               [ $found -eq $expected ] && echo "Pre-listing completed." && break
@@ -384,31 +395,42 @@ function client {
 
             echo "Duration of $attempts pre-list attempts: $prelist_time s"
 
+            t0=$(date +%s)
+
             # split URIs in subsets and write in a file per process, respecting the order of levels in the supplied levelist
-            local proc=
-            local lev=
-            local lev_uris=
-            local path=
-            local offset=
-            local length=
-            local j=
-            local uri=
-            for proc in `seq 0 $(( ppn - 1 ))` ; do
-              rm -f $tmp_dir/uris_${proc}
-              for lev in `seq 0 $(( levels_per_reader_proc - 1 ))` ; do
-                lev_uris=($( echo "${listout}" | grep "levelist=${levelist[ $(( proc * levels_per_reader_proc + lev )) ]}," | \
-                  awk '{print $2}' | sed -e 's/],/?/g' | sed -e 's/,length=/\&length=/g' | \
-                  sed -e 's/,/ /g' | awk '{print $2}' | sed -e 's/name=//g' ))
-                for j in `seq 0 $(( ${#lev_uris[@]} - 1 ))` ; do
-                  uri=${lev_uris[$j]}
-                  path=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $1}' )
-                  offset=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $2}' | sed -e 's/&/ /g' | awk '{print $1}' | sed -e 's/offset=//g' )
-                  length=$( echo "$uri" | sed -e 's/?/ /g' | awk '{print $2}' | sed -e 's/&/ /g' | awk '{print $2}' )
-                  lev_uris[$j]="file:${path}?${length}#${offset}"
-                done
-                printf '%s\n' "${lev_uris[@]}" | sort -R >> $tmp_dir/uris_${proc}
-              done
-            done
+            rm -f $tmp_dir/uris_*
+            echo "$listout" | python3 <(cat <<EOF
+import sys
+import random
+ppn=int(sys.argv[1])
+levels_per_proc=int(sys.argv[2])
+levelist=[int(x) for x in sys.argv[3].split('/')]
+tmp_dir=sys.argv[4]
+uris = [[] for i in range(ppn)]
+last_level = -1
+level_i = -1
+for val in sys.stdin:
+  ident, uri = val.split("TocFieldLocation[uri=URI[scheme=file,name=", 1)
+  uri, other = uri.split("],offset=", 1)
+  offset, other = other.split(",length=", 1)
+  length = other.split(",remapKey=", 1)[0]
+  level = int(ident.split("levelist=", 1)[1].split(",param=", 1)[0])
+  if level != last_level:
+    level_i = levelist.index(level)
+    last_level = level
+  process_i = level_i // levels_per_proc
+  uris[process_i].append("file:" + uri + "?length=" + length + "#" + offset)
+i = 0
+for urilist in uris:
+  random.shuffle(urilist)
+  with open(tmp_dir + "/uris_" + str(i), 'w') as f:
+    f.write('\n'.join(urilist))
+  i+=1
+EOF
+) $ppn $levels_per_reader_proc $node_levels_str $tmp_dir
+
+            tf=$(date +%s)
+            echo "Duration of pre-list postprocessing: $(( tf - t0 )) s"
 
             # notify peer processes listing has completed by opening FIFO for write
             touch $prelist_fifo
@@ -507,6 +529,7 @@ function client {
 function step_end_reporter {
 
   local done_count=()
+  local step=
   for step in "${steps[@]}" ; do
     done_count+=(0)
   done
@@ -518,7 +541,8 @@ function step_end_reporter {
   while [ "$steps_done" -lt "${#steps[@]}" ] ; do
 
     # reads one line from the anonymous pipe into the 'message' variable
-    read -ru 3 message
+    read -t 1000 -ru 3 message
+    [ $? -ne 0 ] && echo "Timed out waiting for list completion signal." && exit 1
 
     # find step counter position in done_count
     local pos=0
@@ -576,7 +600,7 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   step_end_reporter &
 
-  # create a fifo for process 0 to signal other processes that the pre-list has completed
+  # create a FIFO for process 0 to signal other processes that the pre-list has completed
   if [[ "$prelist" == "yes" ]] ; then
     prelist_fifo=$(mktemp -u)
     mkfifo $prelist_fifo

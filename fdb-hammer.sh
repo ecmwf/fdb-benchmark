@@ -548,13 +548,31 @@ num_nodes=${#nodes[@]}
 bw=$(bc <<< "$num_nodes * $ppn * $NSTEPS * $NLEVELS * $NPARAMS * $field_size_mb / ($last_ts - $first_ts)")
 
 avg_sleep_per_step=0
-[[ "$mode" == "write" ]] && [[ "$itt" == "yes" ]] && \
+n_write_window_excess=0
+stats_write_window_excess=
+
+if [[ "$mode" == "write" ]] && [[ "$itt" == "yes" ]] ; then
+
   avg_sleep_per_step=$(cat "${outs[@]}" | grep "time slept per step" | awk '{print $6}' | python3 <(cat <<EOF
 import sys
 d = [int(val) for val in sys.stdin.read().split()]
 print(sum(d) / len(d))
 EOF
 ))
+
+  n_write_window_excess=$(cat "${outs[@]}" | grep 'exceeded' | wc -l)
+
+  stats_write_window_excess=$(cat "${outs[@]}" | grep 'exceeded' | awk '{print $5}' | python3 <(cat <<EOF
+import sys
+d = [float(val) for val in sys.stdin.read().split()]
+print("avg: " + str(sum(d) / len(d)) + ", max: " + str(max(d)))
+EOF
+))
+
+fi
+
+stats_list_duration=
+stats_read_duration=
 
 if [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ; then
 
@@ -566,6 +584,23 @@ if [[ "$mode" == "read" ]] && [[ "$itt" == "yes" ]] ; then
     step_read_summary="${step_read_summary}Step $step fully read at "
     step_read_summary="${step_read_summary}$(date --date @$timestamp)\n"
   done	
+
+  stats_list_duration=
+  [[ "$prelist" == "yes" ]] && stats_list_duration=$(cat "${outs[@]}" | grep 'pre-list attempts' | awk '{print $6}')
+  [[ "$prelist" == "no" ]] && stats_list_duration=$(cat "${outs[@]}" | grep 'list attempts' | awk '{print $7}')
+  stats_list_duration=$(echo "${stats_list_duration}" | python3 <(cat <<EOF
+import sys
+d = [float(val) for val in sys.stdin.read().split()]
+print("avg: " + str(sum(d) / len(d)) + ", max: " + str(max(d)))
+EOF
+))
+
+  stats_read_duration=$(cat "${outs[@]}" | grep 'read duration' | awk '{print $4}' | python3 <(cat <<EOF
+import sys
+d = [float(val) for val in sys.stdin.read().split()]
+print("avg: " + str(sum(d) / len(d)) + ", max: " + str(max(d)))
+EOF
+))
 
 fi
 
@@ -601,7 +636,14 @@ if [[ "$mode" != "list" ]] ; then
   echo "Total ${mode} bandwidth${note}: ${bw} MiB/s"
 
   [[ "$itt" == "yes" ]] && [[ "$mode" == "write" ]] && \
-    echo "Average time slept per step: ${avg_sleep_per_step}"
+    echo "Average time slept per step: ${avg_sleep_per_step}" && \
+    echo "Step window exceeded ${n_write_window_excess} out of $(( ppn * num_nodes * NSTEPS )) times, ${stats_write_window_excess}"
+
+  if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+    [[ "$prelist" == "yes" ]] && echo "Pre-list duration per step per node, ${stats_list_duration}"
+    [[ "$prelist" == "no" ]] && echo "List duration per step per process, ${stats_list_duration}"
+    echo "Data read duration per step per process, ${stats_read_duration}"
+  fi
 
   [ "$failures" -ne 0 ] && echo "Got ${failures} failures" || echo "No failures occurred"
 

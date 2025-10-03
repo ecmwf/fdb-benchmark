@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+
+
 # --- parse parameters
 
 nodelist_arg=( "$(hostname)" )
@@ -8,7 +10,6 @@ nmembers=default
 NSTEPS=10
 NLEVELS=1
 NPARAMS=1
-fields_per_member_per_step=
 read_nodes_per_step=default
 root="$HOME/fdb-hammer-parallel"
 config=
@@ -50,7 +51,6 @@ Available options:\n\n\
 --nsteps <nsteps>\n\nNumber of steps to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for steps 1 to nsteps. Default: 10.\n\n\
 --nlevels <nlevels>\n\nNumber of levels to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', every parallel process in a member archives nlevels unique levels. Default: 1.\n\n\
 --nparams <nparams>\n\nNumber of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params. Default: 1.\n\n\
---fields-per-member-per-step <nfields>\n\nNumber of fields to archive (if MODE is 'write') or archived (if MODE is 'read') per step by all writer processes of a member. This argument overrides --nlevels, and is equivalent to supplying --nlevels=(nfields / --nparams / --ppn / (length(--nodelist) / --nmembers)).\n\n\
 --itt\n\nFlag to enable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.\n\n\
 --nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
 --ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
@@ -106,11 +106,6 @@ Available options:\n\n\
     ;;
     --nparams)
     NPARAMS="$2"
-    shift
-    shift
-    ;;
-    --fields-per-member-per-step)
-    fields_per_member_per_step="$2"
     shift
     shift
     ;;
@@ -237,7 +232,7 @@ done
 set -- "${POSITIONAL[@]}"
 
 if [ ${#POSITIONAL[@]} -ne 1 ] ; then
-    echo "Exactly 1 positional arguments were expected. Check ./fdb-hammer.sh --help."
+    echo "Exactly 1 positional arguments were expected. Found '${POSITIONAL[@]}'. Check ./fdb-hammer.sh --help."
     exit 1
 fi
 
@@ -359,8 +354,6 @@ for pid in "${pids[@]}" ; do
 
 done
 
-
-
 # --- sanity check members
 
 num_nodes=${#nodes_write_or_read[@]}
@@ -386,16 +379,6 @@ fi
 
 
 
-# --- apply fields-per-member-per-step if supplied
-
-if [[ ! -z "$fields_per_member_per_step" ]] ; then
-    NLEVELS=$( python3 <<EOF
-from math import ceil
-print(ceil($fields_per_member_per_step / $NPARAMS / $ppn / ($num_nodes / $nmembers)))
-EOF
-)
-fi
-
 if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   # --- sanity check steps and reader procs if --itt read
@@ -418,7 +401,10 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
     echo "read aborted" && \
     exit 1
 
-  reader_procs_per_step=$(( ppn_read_itt * read_nodes_per_step ))
+  [[ "$prelist" == "yes" ]] && (( "$NLEVELS" % "$read_nodes_per_step" != 0 )) && \
+    echo "nlevels must be divisible by read-nodes-per-step if --prelist" && \
+    echo "read aborted" && \
+    exit 1
 
   num_nodes_write=${#nodes_write_or_read[@]}
   if [ "$num_nodes_write" -gt "$nmembers" ] ; then
@@ -428,12 +414,6 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
     members_per_node=$(( nmembers / num_nodes_write ))
     procs_per_member=$(( ppn / members_per_node ))
   fi
-  written_levels_per_step=$(( NLEVELS * procs_per_member ))
-  fields_per_step_per_member=$(( procs_per_member * NLEVELS * NPARAMS ))
-
-  (( "$fields_per_step_per_member" % "$reader_procs_per_step" != 0 )) && \
-    echo "The total number of fields archived per step per member (${procs_per_member} x ${NLEVELS} x ${NPARAMS} = ${fields_per_step_per_member}) must be divisible by the number of reader processes per step (${reader_procs_per_step})." && \
-    exit 1
 
 
 
@@ -456,7 +436,7 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   max_read_jobs=$(( num_nodes_read_itt / read_nodes_per_step ))
   for job in `seq 1 $max_read_jobs` ; do
-    list=($(seq 1 $written_levels_per_step | shuf))
+    list=($(seq 1 $NLEVELS | shuf))
     for node in `seq 1 $read_nodes_per_step` ; do
       level_lists+=( $(echo "${list[@]}" | tr -s ' ' ',') )
     done
@@ -545,7 +525,7 @@ last_ts=$(cat "${outs[@]}" | grep "Timestamp after last IO" | awk '{print $5}' |
 
 field_size_mb=4.175
 num_nodes=${#nodes[@]}
-bw=$(bc <<< "$num_nodes * $ppn * $NSTEPS * $NLEVELS * $NPARAMS * $field_size_mb / ($last_ts - $first_ts)")
+bw=$(bc <<< "$NSTEPS * $NLEVELS * $NPARAMS * $field_size_mb / ($last_ts - $first_ts)")
 
 avg_sleep_per_step=0
 n_write_window_excess=0
@@ -565,6 +545,8 @@ EOF
   stats_write_window_excess=$(cat "${outs[@]}" | grep 'exceeded' | awk '{print $5}' | python3 <(cat <<EOF
 import sys
 d = [float(val) for val in sys.stdin.read().split()]
+if len(d) == 0:
+  d.append(0)
 print("avg: " + str(sum(d) / len(d)) + ", max: " + str(max(d)))
 EOF
 ))

@@ -70,38 +70,33 @@ rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
 
 # --- run contending writers and readers
 
-# processes per writer node
-ppn=8
-# writer nodes per member
-npm=6
-
 ./fdb-hammer.sh write \
-    --nodelist $WRITERS --ppn $ppn \
-    --nodelist-read $READERS --ppn-read 16 \
-    --nmembers $(( NWRITERS / npm )) --nsteps 16 \
-    --fields-per-member-per-step $(( 160 * 16 )) --nparams 16 \
+    --nodelist $WRITERS --ppn 23 \
+    --nodelist-read $READERS --ppn-read 13 \
+    --nmembers 2 --nsteps 4 \
+    --nlevels 120 --nparams 17 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
-    --read-nodes-per-step 2 \
-    --barrier-port 7777 --barrier-max-wait 10 \
+    --poll-max-attempts 200 --prelist \
+    --read-nodes-per-step 3 --read-step-window 10 --read-random-delay 0 \
+    --barrier-port 7777 --barrier-max-wait 100 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     > write.out < /dev/null &
 
-#    --nlevels $(( 150 / ppn / npm )) --nparams 15 \
+sleep 20
 
 ./fdb-hammer.sh read \
-    --nodelist $WRITERS --ppn $ppn \
-    --nodelist-read $READERS --ppn-read 16 \
-    --nmembers $(( NWRITERS / npm )) --nsteps 16 \
-    --fields-per-member-per-step $(( 160 * 16 )) --nparams 16 \
+    --nodelist $WRITERS --ppn 23 \
+    --nodelist-read $READERS --ppn-read 13 \
+    --nmembers 2 --nsteps 4 \
+    --nlevels 120 --nparams 17 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
-    --read-nodes-per-step 2 \
-    --barrier-port 7777 --barrier-max-wait 10 \
+    --poll-max-attempts 200 --prelist \
+    --read-nodes-per-step 3 --read-step-window 10 --read-random-delay 0 \
+    --barrier-port 7777 --barrier-max-wait 100 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     > read.out < /dev/null &
-
-#    --nlevels $(( 150 / ppn / npm )) --nparams 15 \
 
 wait
 
@@ -114,6 +109,7 @@ clush -w $ALL "ps -aux | grep '^$USER ' | wc -l"
 # if any, kill as follows
 #clush -w $ALL "ps -aux | grep 'fdb-hammer ' | awk '{print \$2}' | xargs -I{} kill {}"
 #clush -w $ALL "ps -aux | grep 'bash -s ' | awk '{print \$2}' | xargs -I{} kill {}"
+#clush -w $ALL "ps -aux | grep 'timeout 500' | awk '{print \$2}' | xargs -I{} kill {}"
 
 # list active orchestrating processes on the login/orchestrating node
 ps -aux | grep fdb-hammer.sh

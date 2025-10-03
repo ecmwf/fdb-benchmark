@@ -31,9 +31,10 @@ level_list=${30:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
-levelist=(${level_list//,/ })
 nodelist=(${nodes//,/ })
 num_nodes=${#nodelist[@]}
+
+levelist=(${level_list//,/ })
 
 # if itt read mode, populate the nodelist, num_nodes, and ppn variables
 # based on the read node list and read ppn. These variables will be used
@@ -99,68 +100,19 @@ if [[ "$artifact_dir_is_shared" == "no" ]] || [[ "$this_node" == "${nodelist[0]}
 fi
 
 
-# # --- barrier
-#
-# NOTE: this barrier is needed specially for the first run of the benchmark where
-# one or multiple parallel processes may spend a significant and variable amount of
-# time installing the benchmark binaries. It is less relevant for subsequent runs.
-#
-# TODO: for now commented out as there's a bug. In the meantime, the benchmark can
-# be first run with ppn=1 to trigger installation on all nodes, and then rerun with
-# larger ppn -- installation will be skipped and no significant delays will occur.
-#
-# if [ $I -eq 0 ] ; then
-#
-#   # --- wait for ping from all other nodes
-#   for node in "${nodelist[@]}" ; do
-#     [[ "$node" == "$(hostname)" ]] && continue
-#     echo "WAITING FOR MESSAGE FROM ${node} ON $(hostname)"
-#     m=$(${netcat_dir}/netcat.out -l 12345 | bash -c 'read MESSAGE; echo "$(hostname) RECEIVED MESSAGE": $MESSAGE')
-#     [[ ! "${m}" =~ "succeeded" ]] && exit 1
-#   done
-#
-#   # --- send ping to all other nodes
-#   status="succeeded"
-#   for node in "${nodelist[@]}" ; do
-#     [[ "$node" == "$(hostname)" ]] && continue
-#     #echo "WAITING FOR MESSAGE FROM ${node} ON $(hostname)"
-#     #m=$(${netcat_dir}/netcat.out -l 12345 | bash -c 'read MESSAGE; echo "$(hostname) RECEIVED MESSAGE": $MESSAGE')
-#     #[[ ! "${m}" =~ "succeeded" ]] && exit 1
-#     code=1
-#     while [ "$code" -ne 0 ] ; do
-#       echo "SENDING MESSAGE FROM $(hostname) TO ${node}"
-#       echo "SETUP ON $(hostname) ${status}" | ${netcat_dir}/netcat.out ${node} 12345 2>1 | grep -v 'error'
-#       code=$?
-#       [ "$code" -ne 0 ] && sleep 2
-#     done
-#   done
-#   [[ "${status}" == "failed" ]] && exit 1
-#
-# else
-#
-#   # --- send ping to first node
-#   status="succeeded"
-#   code=1
-#   while [ "$code" -ne 0 ] ; do
-#     echo "SENDING MESSAGE FROM $(hostname) TO ${nodelist[0]}"
-#     echo "SETUP ON $(hostname) ${status}" | ${netcat_dir}/netcat.out ${nodelist[0]} 12345 2>1 | grep -v 'error'
-#     code=$?
-#     [ "$code" -ne 0 ] && sleep 2
-#   done
-#   [[ "${status}" == "failed" ]] && exit 1
-#
-#   # --- wait ping from first node
-#   echo "WAITING FOR MESSAGE FROM ${nodelist[0]} ON $(hostname)"
-#   m=$(${netcat_dir}/netcat.out -l 12345 | bash -c 'read MESSAGE; echo "$(hostname) RECEIVED MESSAGE": $MESSAGE')
-#   [[ ! "${m}" =~ "succeeded" ]] && exit 1
-#
-# fi
-
-
 
 # --- execute fdb-hammer
+
 tmp_dir=$(mktemp -d -t test_fdb_hammer_XXX)
 cd $tmp_dir
+
+n_chips=$(cat /proc/cpuinfo | grep "physical id" | sort -u | wc -l)
+n_cores=$(cat /proc/cpuinfo | grep "cpu cores" | sort -u | awk '{print $4}')
+ht=0
+n_procs=$(cat /proc/cpuinfo | grep "processor" | sort -u | wc -l)
+[ "$n_procs" -gt "$(( n_cores * n_chips ))" ] && ht=1
+
+
 
 function pin {
         local x=$1
@@ -180,11 +132,7 @@ function pin {
         echo "$y"
 }
 
-n_chips=$(cat /proc/cpuinfo | grep "physical id" | sort -u | wc -l)
-n_cores=$(cat /proc/cpuinfo | grep "cpu cores" | sort -u | awk '{print $4}')
-ht=0
-n_procs=$(cat /proc/cpuinfo | grep "processor" | sort -u | wc -l)
-[ "$n_procs" -gt "$(( n_cores * n_chips ))" ] && ht=1
+
 
 function client {
 
@@ -229,24 +177,24 @@ function client {
   local database=
   local database_proc_i=
 
-  local written_levels_per_step=
   local nodes_per_step=
   local steps_per_node=
   local procs_per_step=
   local step_proc_i=
   local levels_per_reader_proc=
-  local level=
+  local first_level=
   local levels=
+  local levels_subset=
+
+  local fields_per_member_per_step=
+  local fields_this_proc=
+  local remainder=
+  local fields_before_this_proc=
+  local to_add=
+  local nlevels_this_proc=
+  local stop_at=
 
   if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
-
-    if [ "$num_nodes_write" -lt "$nmembers" ] ; then
-      members_per_node=$(( nmembers / num_nodes_write ))
-      written_levels_per_step=$(( nlevels * ppn_write / members_per_node ))
-    else
-      nodes_per_member=$(( num_nodes_write / nmembers ))
-      written_levels_per_step=$(( nlevels * ppn_write * nodes_per_member ))
-    fi
 
     nodes_per_step=$read_nodes_per_step
 
@@ -256,37 +204,47 @@ function client {
     database=$(( step_proc_i / procs_per_db ))
 
     database_proc_i=$(( step_proc_i % procs_per_db ))
-    levels_per_reader_proc=$(( written_levels_per_step / procs_per_step ))
-    level=$(( ( levels_per_reader_proc * database_proc_i ) + 1 ))
-
-    levels_subset=( "${levelist[@]:$(( level - 1 )):${levels_per_reader_proc}}" )
-    levels=$(echo "${levels_subset[@]}" | tr -s ' ' ',')
 
   else
 
     if [ "$num_nodes" -gt "$nmembers" ] ; then
         nodes_per_member=$(( num_nodes / nmembers ))
         number=$(( I / nodes_per_member + 1 ))
-
         procs_per_member=$(( ppn * nodes_per_member ))
-        procs_per_db=$(( procs_per_member / ndatabases ))
         member_proc_i=$(( ppn * (I % nodes_per_member) + i ))
-        database=$(( member_proc_i / procs_per_db ))
-
-        database_proc_i=$(( member_proc_i % procs_per_db ))
-        level=$(( ( nlevels * database_proc_i ) + 1 ))
     else
         members_per_node=$(( nmembers / num_nodes ))
         procs_per_member=$(( ppn / members_per_node ))
         number=$(( ( I * members_per_node ) + ( i / procs_per_member ) + 1 ))
-
-        procs_per_db=$(( procs_per_member / ndatabases ))
         member_proc_i=$(( i % procs_per_member ))
-        database=$(( member_proc_i / procs_per_db ))
-
-        database_proc_i=$(( member_proc_i % procs_per_db ))
-        level=$(( ( nlevels * database_proc_i ) + 1 ))
     fi
+
+    procs_per_db=$(( procs_per_member / ndatabases ))
+    database=$(( member_proc_i / procs_per_db ))
+    database_proc_i=$(( member_proc_i % procs_per_db ))
+
+  fi
+
+  fields_per_member_per_step=$(( nlevels * nparams ))
+  fields_this_proc=$(( fields_per_member_per_step / procs_per_db ))
+  remainder=$(( fields_per_member_per_step % procs_per_db ))
+  [ $database_proc_i -lt $remainder ] && fields_this_proc=$(( fields_this_proc + 1 ))
+
+  fields_before_this_proc=$(( ( fields_per_member_per_step / procs_per_db ) * database_proc_i ))
+  to_add=$remainder
+  [ $database_proc_i -lt $remainder ] && to_add=$database_proc_i
+  fields_before_this_proc=$(( fields_before_this_proc + to_add ))
+
+  first_level=$(( ( fields_before_this_proc / nparams ) + 1 ))
+  start_at=$(( fields_before_this_proc % nparams ))
+  nlevels_this_proc=$(( ( start_at + fields_this_proc ) / nparams ))
+  [ $(( ( start_at + fields_this_proc ) % nparams )) -gt 0 ] && nlevels_this_proc=$(( nlevels_this_proc + 1 ))
+  stop_at=$(( start_at + fields_this_proc - 1 ))
+
+  if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
+
+    levels_subset=( "${levelist[@]:$(( first_level - 1 )):${nlevels_this_proc}}" )
+    levels=$(echo "${levels_subset[@]}" | tr -s ' ' ',')
 
   fi
 
@@ -318,7 +276,7 @@ function client {
             --nsteps=1 \
             --nensembles=$nmembers \
             --number=1 \
-            --nlevels=$(( nlevels * procs_per_db )) \
+            --nlevels=$nlevels \
             --level=1 \
             --nparams=$nparams \
             --config=$tmp_dir/config.yaml \
@@ -361,7 +319,7 @@ function client {
 
           if [[ "$i" == 0 ]] ; then
 
-            local levels_per_reader_node=$(( written_levels_per_step / read_nodes_per_step ))
+            local levels_per_reader_node=$(( nlevels / nodes_per_step ))
             local first_node_level=$(( ( I % nodes_per_step ) * levels_per_reader_node ))
             local node_levels=( "${levelist[@]:${first_node_level}:${levels_per_reader_node}}" )
             local node_levels_str=$( printf '%s/' "${node_levels[@]}" )
@@ -402,32 +360,52 @@ function client {
             echo "$listout" | python3 <(cat <<EOF
 import sys
 import random
-ppn=int(sys.argv[1])
-levels_per_proc=int(sys.argv[2])
-levelist=[int(x) for x in sys.argv[3].split('/')]
-tmp_dir=sys.argv[4]
-uris = [[] for i in range(ppn)]
-last_level = -1
-level_i = -1
+
+ppn = int(sys.argv[1])
+nparams = int(sys.argv[2])
+nmembers = int(sys.argv[3])
+levelist = [int(x) for x in sys.argv[4].split('/')]
+tmp_dir = sys.argv[5]
+
+nfields = nparams * nmembers * len(levelist)
+fields_per_proc = [nfields // ppn + (1 if x < nfields % ppn else 0) for x in range(ppn)]
+
+uris_per_level = {}
+
+for lev in levelist:
+  uris_per_level[lev] = []
+
+count = 0
 for val in sys.stdin:
   ident, uri = val.split("TocFieldLocation[uri=URI[scheme=file,name=", 1)
   uri, other = uri.split("],offset=", 1)
   offset, other = other.split(",length=", 1)
   length = other.split(",remapKey=", 1)[0]
   level = int(ident.split("levelist=", 1)[1].split(",param=", 1)[0])
-  if level != last_level:
-    level_i = levelist.index(level)
-    last_level = level
-  process_i = level_i // levels_per_proc
-  uris[process_i].append("file:" + uri + "?length=" + length + "#" + offset)
+  uris_per_level[level].append("file:" + uri + "?length=" + length + "#" + offset)
+  count += 1
+
+if count != nfields:
+  raise RuntimeError('Received less URIs than expected')
+
+uris_per_proc = [[] for i in range(ppn)]
+
+proc_i = 0
+for lev in levelist:
+  for par in range(nparams * nmembers):
+    uris_per_proc[proc_i].append(uris_per_level[lev][par])
+    fields_per_proc[proc_i] -= 1
+    if fields_per_proc[proc_i] < 1:
+      proc_i += 1
+
 i = 0
-for urilist in uris:
+for urilist in uris_per_proc:
   random.shuffle(urilist)
   with open(tmp_dir + "/uris_" + str(i), 'w') as f:
     f.write('\n'.join(urilist))
   i+=1
 EOF
-) $ppn $levels_per_reader_proc $node_levels_str $tmp_dir
+) $ppn $nparams $nmembers $node_levels_str $tmp_dir
 
             tf=$(date +%s)
             echo "Duration of pre-list postprocessing: $(( tf - t0 )) s"
@@ -461,14 +439,14 @@ EOF
                 --number=1 \
                 --levels=$levels \
                 --nparams=$nparams \
+                --start-at=$start_at \
+                --stop-at=$stop_at \
                 $uris_arg \
                 $check_arg \
                 --config=$tmp_dir/config.yaml \
                 ${verbose_arg} \
                 2>&1
         )"
-                #--nlevels=$levels_per_reader_proc \
-                #--level=$level \
 
         rc=$?
 
@@ -502,9 +480,11 @@ EOF
               --nsteps=$nsteps \
               --nensembles=1 \
               --number=$number \
-              --nlevels=$nlevels \
-              --level=$level \
+              --nlevels=$nlevels_this_proc \
+              --level=$first_level \
               --nparams=$nparams \
+              --start-at=$start_at \
+              --stop-at=$stop_at \
               $check_arg \
               --config=$tmp_dir/config.yaml \
               ${verbose_arg} \
@@ -525,6 +505,8 @@ EOF
   echo -e "Node $I client $i succeeded\n${prof}"
 
 }
+
+
 
 function step_end_reporter {
 
@@ -564,6 +546,8 @@ function step_end_reporter {
   done
 
 }
+
+
 
 test_src_dir=${artifact_dir}
 

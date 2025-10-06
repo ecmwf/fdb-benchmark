@@ -279,7 +279,7 @@ fi
 
 cp ${src_dir}/artifacts/${backend}/schema ${root}/schema
 
-cp ${src_dir}/artifacts/sample4.175MiB_ccsds ${root}/sample_field
+cp ${src_dir}/artifacts/sample*MiB_ccsds ${root}/
 
 
 

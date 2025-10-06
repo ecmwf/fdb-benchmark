@@ -6,28 +6,29 @@ nmembers=$5
 NSTEPS=$6
 NLEVELS=$7
 NPARAMS=$8
-check=$9
-reinstall=${10}
-artifact_dir=${11}
-artifact_dir_is_shared=${12}
-prolog_script=${13}
-verbose=${14}
-itt=${15:-no}
-member_delay=${16:-}
-reader_delay=${17:-}
-step_window=${18:-}
-random_delay=${19:-}
-barrier_port=${20:-}
-barrier_max_wait=${21:-}
-nodes_read=${22:-}
-read_nodes_per_step=${23:-}
-ppn_read=${24:-}
-poll_period=${25:-}
-poll_max_attempts=${26:-}
-read_step_window=${27:-}
-read_random_delay=${28:-}
-prelist=${29:-}
-level_list=${30:-}
+field_size=$9
+check=${10}
+reinstall=${11}
+artifact_dir=${12}
+artifact_dir_is_shared=${13}
+prolog_script=${14}
+verbose=${15}
+itt=${16:-no}
+member_delay=${17:-}
+reader_delay=${18:-}
+step_window=${19:-}
+random_delay=${20:-}
+barrier_port=${21:-}
+barrier_max_wait=${22:-}
+nodes_read=${23:-}
+read_nodes_per_step=${24:-}
+ppn_read=${25:-}
+poll_period=${26:-}
+poll_max_attempts=${27:-}
+read_step_window=${28:-}
+read_random_delay=${29:-}
+prelist=${30:-}
+level_list=${31:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -551,7 +552,7 @@ function step_end_reporter {
 
 test_src_dir=${artifact_dir}
 
-cp $test_src_dir/sample_field $tmp_dir/sample_field
+cp $test_src_dir/sample${field_size}_ccsds $tmp_dir/sample_field
 cp $test_src_dir/schema $tmp_dir/schema
 cp $test_src_dir/config.yaml.in $tmp_dir/config.yaml
 sed -i -e "s#@SCHEMA_PATH@#${tmp_dir}/schema#" $tmp_dir/config.yaml

@@ -4,7 +4,7 @@ The fdb-BM-test is used to simulate the quality and quantity of filesystem I/O o
 
 The test writes synthetic forecast output fields from a number of concurrent writer processes executing on compute nodes.
 
-At the same time, the test also simulates, concurrent to the aforementioned ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for “product generation”, “pgen” post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
+At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for “product generation”, “pgen” post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
 For this, fdb-BM-test uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up. 
 
 ## Installation
@@ -55,6 +55,8 @@ The fdb-BM-test is orchestrated by `fdb-hammer.sh` and parses the user paramemte
 `fdbh_one_node.sh` takes the arguments and executes the benchmark workload on that node, handling CPU pinning, work distribution and running the `fdb-hammer` binary in parallel.
 
 After all nodes finish `fdb-hammer.sh` collects output, aggregates results and prints summary statistics.
+
+Separate instances of `fdb-hammer.sh` need to be run concurrently, with one handling the setup and running of the `WRITERS` and another handling the setup and running of the `READERS`.
 
 ### Setting up the WRITERS and READERS
 
@@ -210,13 +212,164 @@ new_fdb_root=/path/to/new/fdb_root
 ```
 ### Running Multiple Writers on one node
 
+The number of writer nodes is derived from the size of the nodelist pass to `fdb-hammer.sh` and the number of members. 
+
+* If the number of members (nmembers) is greater than the number of nodes, each node will handle multiple members. The script calculates how many members per node by dividing nmembers by the number of nodes.
+* If the number of nodes is greater than the number of members, multiple nodes may share the same member.
+* The script uses these calculations to assign processes on each node to specific members, ensuring all members are covered and distributed as evenly as possible.
+
 ## Command Line Arguments
+Below is a summary of all input arguments for `fdb-hammer.sh`, what they control, and their defaults:
+
+---
+
+### `MODE`
+- Options: `write`, `read`, `list`
+- Specifies the operation mode: writing data, reading data, or listing data fields.
+- Only `write` and `read` are needed for ITT380.
+
+### `--nodelist <list>`
+- Node list of where to run writer processes.  (Tested with Slurm syntax)
+  **Default:** local host name.
+
+### `--ppn <ppn>`
+- Number of parallel processes per node for `WRITERS`.  
+  **Default:** `1`
+
+### `--nmembers <nmembers>`
+- Total number of members to archive/retrieve.  
+  **Default:** one per node in `--nodelist` (or set to `default`).
+
+### `--nsteps <nsteps>`
+- Number of steps to archive or retrieve per process.  
+  **Default:** `90`
+
+### `--nlevels <nlevels>`
+- Number of levels to archive or retrieve per process.  
+  **Default:** `120`
+
+### `--nparams <nparams>`
+- Number of parameters to archive or retrieve per process.  
+  **Default:** `6`
+
+### `--field-size <size>`
+- Size of the GRIB field used for writes.  
+  **Default:** `17.37MiB`
+
+### `--itt` / `--no-itt`
+- Enables or disables Interleaved Time-Triggered (ITT) mode for synchronized step-wise access.  
+  **Default:** enabled
+
+### `--nodelist-read <list>`
+- Node list for reader processes in ITT read mode.  
+  **Default:** not set (required in ITT read mode)
+
+### `--ppn-read <ppn>`
+- Number of reader processes per node in ITT read mode.  
+  **Default:** not set (required in ITT read mode)
+
+### `--read-nodes-per-step <nnodes>`
+- Number of reader nodes per step in ITT read mode.  
+  **Default:** `1` (or calculated based on steps and nodes)
+
+### `--barrier-port <port>`
+- Port for writer node barrier synchronization in ITT write mode.  
+  **Default:** `7777`
+
+### `--barrier-max-wait <seconds>`
+- Maximum wait time for barrier synchronization in ITT write mode.  
+  **Default:** `10`
+
+### `--poll-period <period>`
+- Polling interval (seconds) for reader processes in ITT read mode.  
+  **Default:** `10`
+
+### `--poll-max-attempts <attempts>`
+- Maximum polling attempts before failure in ITT read mode.  
+  **Default:** `200`
+
+### `--member-delay <seconds>`
+- Delay between launching writer processes for different members in ITT write mode.  
+  **Default:** `2`
+
+### `--reader-delay <seconds>`
+- Delay between launching reader processes for different steps in ITT read mode.  
+  **Default:** `0`
+
+### `--step-window <seconds>`
+- Time window allowed per writer process for each step in ITT write mode.  
+  **Default:** `10`
+
+### `--random-delay <percent>`
+- Random delay (as a percent of `--step-window`) before writer I/O in ITT write mode.  
+  **Default:** `100`
+
+### `--read-step-window <seconds>`
+- Time window allowed per reader process for each step in ITT read mode.  
+  **Default:** `10`
+
+### `--read-random-delay <percent>`
+- Random delay (as a percent of `--read-step-window`) before reader I/O in ITT read mode.  
+  **Default:** `0`
+
+### `--prelist` / `--no-prelist`
+- Enables or disables pre-listing of field locations for reader nodes in ITT read mode.  
+  **Default:** enabled
+
+### `--root <path>`
+- Path to the root directory for binaries and artifacts.  
+  **Default:** `$HOME/fdb-hammer-parallel`
+
+### `--config <path>`
+- Path to the FDB client configuration file.  
+  **Default:** `<root>/config.yaml.in`
+
+### `--prolog-script <path>`
+- Path to a script sourced on each node before running the workload.  
+  **Default:** `none`
+
+### `--md-check`
+- Enables metadata consistency checks during reading.  
+  **Default:** disabled
+
+### `--full-check`
+- Enables full data and metadata consistency checks during reading.  
+  **Default:** disabled
+
+### `--install`
+- Installs required binaries and artifacts on client nodes.  
+  **Default:** disabled
+
+### `--artifact-dir <path>`
+- Path to install binaries and artifacts on client nodes.  
+  **Default:** `~/fdb-hammer-parallel/artifacts`
+
+### `--artifact-dir-is-shared` / `--no-artifact-dir-is-shared`
+- Indicates whether the artifact directory is shared via a networked filesystem.  
+  **Default:** enabled
+
+### `--verbose`
+- Enables verbose output, printing field identifiers archived or retrieved.  
+  **Default:** disabled
+
+### `-h`, `--help`
+- Shows the help menu and usage instructions.
+
+---
 
 ## Current Limitations
 
-## Running Consistency Checks
+### Limitations for Combinations of Nodes per Reader (ITT Read Mode)
 
->TODO: Fix errors that prevent this from working at the moment
+- The number of reader nodes per step (`--read-nodes-per-step`) must be less than or equal to the total number of nodes specified in `--nodelist-read`.
+- If `--read-nodes-per-step` is less than the total number of reader nodes, it must be a divisor of the total number of reader nodes.
+- If the `--prelist` option is enabled, the number of levels (`--nlevels`) must be divisible by the number of reader nodes per step.
+- If the number of steps (`--nsteps`) is less than the number of reader nodes, the number of reader nodes must be divisible by the number of steps.
+- These constraints ensure that the workload is evenly distributed and that each reader node gets a valid subset of data to process.
+
+If these conditions are not met, the script will abort with an error message to prevent misconfiguration and ensure correct parallel execution.
+
+## Running Consistency Checks
 
 It is important that, not only, that the storage subsystem is able to manage the demands of the ECMWF operational workflow but also that it does so whilst ensuring the correctness of data.
 
@@ -260,14 +413,18 @@ clush -w $ALL 'ls /tmp/$USER/'
 #     Sorted from less to more destructive.
 
 # removes the FDB data directory
-#rm -rf ${fdb_root?}
+rm -rf ${fdb_root?}
 
 # removes the artifacts installed by setup.sh
-#rm -rf ${SCRATCH?}/fdb-hammer-parallel
+rm -rf ${SCRATCH?}/fdb-hammer-parallel
 
 # removes the benchmark build
-#rm -rf ${build_root?}
+rm -rf ${build_root?}
 
 # removes the benchmark repository
-#rm -rf ${SCRATCH?}/git/fdb-hammer-parallel
+rm -rf ${SCRATCH?}/git/fdb-hammer-parallel
 ```
+
+## Known Issues
+
+- Consistency checking is currently broken

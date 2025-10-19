@@ -4,4 +4,4 @@ number: Integer;
 step: Step;
 date: Date;
 expver: Expver;
-[class, expver, stream, date, time, domain [type, levtype [step, number, levelist, param]]]
+[class, expver, stream, date, time, domain, timespan? [type, levtype [step, number, levelist, param]]]

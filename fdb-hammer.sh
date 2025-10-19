@@ -11,6 +11,8 @@ NSTEPS=90
 NLEVELS=120
 NPARAMS=6
 field_size="17.37MiB"
+ccsds=yes  # yes or no
+randomise_data=yes  # yes or no
 read_nodes_per_step=default
 root="$HOME/fdb-hammer-parallel"
 config=
@@ -54,6 +56,8 @@ Available options:\n\n\
 --nlevels <nlevels>\n\nNumber of levels to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', every parallel process in a member archives nlevels unique levels. Default: 120.\n\n\
 --nparams <nparams>\n\nNumber of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params. Default: 6.\n\n\
 --field-size <size>\n\nSize of the GRIB field to be used as seed for all writes. Default: 17.37MiB.\n\n\
+--no-ccsds\n\nFlag to disable CCSDS compression.\n\n\
+--no-randomise-data\n\nFlag to disable field data randomisation (if MODE is 'write'). By default, the data of every field written is randomised with decimal values between 0 and 1.\n\n\
 --itt|--no-itt\n\nFlag to enable/disable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps).\nWhen --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode. Default: Enabled \n\n\
 --nodelist-read <list>\n\nIf MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.\n\n\
 --ppn-read <ppn>\n\nIf MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.\n\n\
@@ -115,6 +119,14 @@ Available options:\n\n\
     --field-size)
     field_size="$2"
     shift
+    shift
+    ;;
+    --no-ccsds)
+    ccsds=no
+    shift
+    ;;
+    --no-randomise-data)
+    randomise_data=no
     shift
     ;;
     --itt)
@@ -274,7 +286,15 @@ fi
 [ "$reader_delay" -gt 0 ] && [ "$read_step_window" -gt 0 ] && \
   echo "Cannot provide both --reader-delay and --read-step-window > 0." && exit 1
 
-[ ! -f ${root}/sample${field_size}_ccsds ] && echo "No seed GRIB field available for the specified --field-size." && exit 1
+sample_suffix="_simple"
+[[ "$ccsds" == "yes" ]] && sample_suffix="_ccsds"
+
+[ ! -f ${root}/sample${field_size}${sample_suffix} ] && echo "No seed GRIB field available for the specified --field-size." && exit 1
+
+#[[ "$itt" == "yes" ]] && [[ "$prelist" == "yes" ]] && [[ "$check" != "no" ]] && echo "Enabling --md-check or --full-check is not supported if --itt and --prelist." && exit 1
+[[ "$check" == "full" ]] && [[ "$randomise_data" == "yes" ]] && echo "If --full-check is enabled, data randomisation must be disabled with --no-randomise-data." && exit 1
+[[ "$check" == "md" ]] && [[ "$randomise_data" == "yes" ]] && [[ "$ccsds" == "yes" ]] && \
+  echo "If --md-check is enabled, at least one of data randomisation or CCSDS compression must be disabled with --no-randomise-data and --no-ccsds, respectively." && exit 1
 
 
 
@@ -327,7 +347,7 @@ nodes_read_itt=
 # --- copy artifacts
 
 artifacts=( \
-  "$root/sample${field_size}_ccsds" \
+  "$root/sample${field_size}${sample_suffix}" \
   "$root/schema" \
   "$config" \
 )
@@ -495,7 +515,7 @@ start_time=$(date +%s)
 for node in "${nodes[@]}" ; do
 
   args=( \
-    $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS $field_size \
+    $i $ppn $mode $nodelist $nmembers $NSTEPS $NLEVELS $NPARAMS $field_size $ccsds $randomise_data \
     $check $install $artifact_dir $artifact_dir_is_shared $prolog_script $verbose \
     $itt $member_delay $reader_delay $step_window $random_delay \
     $barrier_port $barrier_max_wait \

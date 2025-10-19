@@ -157,6 +157,7 @@ fi
 if [ ! -e $git_dir/ecbuild ] ; then
   cd $git_dir
   git clone https://github.com/ecmwf/ecbuild
+  git checkout 3.12.0
 fi
 
 # --- fdb
@@ -181,11 +182,11 @@ endif()
 
 ecbuild_bundle_initialize()
 
-ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"               TAG 2.41.0   UPDATE)
-ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.29.3   UPDATE)
+ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"               TAG 2.43.0   UPDATE)
+ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.32.2   UPDATE)
 ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   TAG 1.6.1   UPDATE)
-ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.13.3   UPDATE)
-ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG aca2d88023b206795c338281238804eeda336715 UPDATE)
+ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.15.2   UPDATE)
+ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 03e5a1088e21a402adcd8bff87b37206fcb987c9 UPDATE)
 
 ecbuild_bundle_finalize()
 EOF
@@ -279,7 +280,7 @@ fi
 
 cp ${src_dir}/artifacts/${backend}/schema ${root}/schema
 
-cp ${src_dir}/artifacts/sample*MiB_ccsds ${root}/
+cp ${src_dir}/artifacts/sample* ${root}/
 
 
 

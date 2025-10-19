@@ -7,28 +7,30 @@ NSTEPS=$6
 NLEVELS=$7
 NPARAMS=$8
 field_size=$9
-check=${10}
-reinstall=${11}
-artifact_dir=${12}
-artifact_dir_is_shared=${13}
-prolog_script=${14}
-verbose=${15}
-itt=${16:-no}
-member_delay=${17:-}
-reader_delay=${18:-}
-step_window=${19:-}
-random_delay=${20:-}
-barrier_port=${21:-}
-barrier_max_wait=${22:-}
-nodes_read=${23:-}
-read_nodes_per_step=${24:-}
-ppn_read=${25:-}
-poll_period=${26:-}
-poll_max_attempts=${27:-}
-read_step_window=${28:-}
-read_random_delay=${29:-}
-prelist=${30:-}
-level_list=${31:-}
+ccsds=${10}
+randomise_data=${11}
+check=${12}
+reinstall=${13}
+artifact_dir=${14}
+artifact_dir_is_shared=${15}
+prolog_script=${16}
+verbose=${17}
+itt=${18:-no}
+member_delay=${19:-}
+reader_delay=${20:-}
+step_window=${21:-}
+random_delay=${22:-}
+barrier_port=${23:-}
+barrier_max_wait=${24:-}
+nodes_read=${25:-}
+read_nodes_per_step=${26:-}
+ppn_read=${27:-}
+poll_period=${28:-}
+poll_max_attempts=${29:-}
+read_step_window=${30:-}
+read_random_delay=${31:-}
+prelist=${32:-}
+level_list=${33:-}
 
 [[ "$prolog_script" != "none" ]] && source "${artifact_dir}/${prolog_script}"
 
@@ -469,6 +471,9 @@ EOF
       itt_arg=
       [[ "$itt" == "yes" ]] && itt_arg="--itt --ppn=${ppn} --nodes=${nodes} --step-window=${step_window} --random-delay=${random_delay} --barrier-port=${barrier_port} --barrier-max-wait=${barrier_max_wait}"
 
+      randomise_arg=
+      [[ "$randomise_data" == "no" ]] && randomise_arg="--no-randomise-data"
+
       # reproduce delay among members if ITT write
       [[ "$itt" == "yes" ]] && sleep $(( member_delay * ( number - 1 ) ))
 
@@ -486,6 +491,7 @@ EOF
               --nparams=$nparams \
               --start-at=$start_at \
               --stop-at=$stop_at \
+              $randomise_arg \
               $check_arg \
               --config=$tmp_dir/config.yaml \
               ${verbose_arg} \
@@ -552,7 +558,10 @@ function step_end_reporter {
 
 test_src_dir=${artifact_dir}
 
-cp $test_src_dir/sample${field_size}_ccsds $tmp_dir/sample_field
+sample_suffix="_simple"
+[[ "$ccsds" == "yes" ]] && sample_suffix="_ccsds"
+
+cp $test_src_dir/sample${field_size}${sample_suffix} $tmp_dir/sample_field
 cp $test_src_dir/schema $tmp_dir/schema
 cp $test_src_dir/config.yaml.in $tmp_dir/config.yaml
 sed -i -e "s#@SCHEMA_PATH@#${tmp_dir}/schema#" $tmp_dir/config.yaml

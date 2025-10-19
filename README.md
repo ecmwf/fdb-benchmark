@@ -35,8 +35,8 @@ mkdir -p $TMPDIR
 
 # --- allocate compute nodes
 
-NWRITERS=18
-NREADERS=18
+NWRITERS=2
+NREADERS=2
 NALL=$(( NWRITERS + NREADERS ))
 salloc -N $NALL -n $NALL --exclusive --no-shell
 
@@ -66,7 +66,7 @@ READERS=$(nodeset --split 2 -f $ALL | tail -n 1)
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     --verbose
 
-rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g:
 
 # --- run contending writers and readers
 
@@ -77,7 +77,7 @@ rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
     --nlevels 120 --nparams 17 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
     --poll-max-attempts 200 --prelist \
-    --read-nodes-per-step 3 --read-step-window 10 --read-random-delay 0 \
+    --read-nodes-per-step 2 --read-step-window 10 --read-random-delay 0 \
     --barrier-port 7777 --barrier-max-wait 100 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
@@ -92,7 +92,7 @@ sleep 20
     --nlevels 120 --nparams 17 \
     --itt --step-window 10 --random-delay 100 --poll-period 10 \
     --poll-max-attempts 200 --prelist \
-    --read-nodes-per-step 3 --read-step-window 10 --read-random-delay 0 \
+    --read-nodes-per-step 2 --read-step-window 10 --read-random-delay 0 \
     --barrier-port 7777 --barrier-max-wait 100 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
@@ -100,7 +100,7 @@ sleep 20
 
 wait
 
-rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g:
 
 # --- checklist after a benchmark run hangs or terminates abruptly
 

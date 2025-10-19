@@ -157,6 +157,7 @@ fi
 if [ ! -e $git_dir/ecbuild ] ; then
   cd $git_dir
   git clone https://github.com/ecmwf/ecbuild
+  cd ecbuild
   git checkout 3.12.0
 fi
 

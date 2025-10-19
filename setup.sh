@@ -8,7 +8,7 @@ src_dir=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 
 # --- parse arguments
 
-root=/tmp/fdb-hammer-parallel
+root=/tmp/fdb-benchmark
 rebuild="false"
 backend=
 fdb_root=
@@ -24,7 +24,7 @@ case $key in
 Usage:\n\n\
 ./setup.sh [options]\n\n\
 Available options:\n\n\
---root <path>\n\nPath to a root directory where to build and install FDB and other repositories. Defaults to /tmp/fdb-hammer-parallel.\n\n\
+--root <path>\n\nPath to a root directory where to build and install FDB and other repositories. Defaults to /tmp/fdb-benchmark.\n\n\
 --rebuild\n\nFlag to trigger rebuild from scratch rather than reuse previously built binaries.\n\n\
 --backend <backend>\n\nName of the storage backend the benchmark will be run against. Can be posix, lustre, nfs, remote, daos, or ceph. Has no default.\n\n\
 --fdb-root <path>\n\nPath to an existing root directory for the FDB posix, lustre, or nfs backend to internally store its data and indices.\n\n\

@@ -3,23 +3,23 @@
 export SCRATCH=$SCRATCH
 
 # fast file system where the benchmark will be built before installing
-build_root=/tmp/fdb-hammer-parallel_$USER
+build_root=/tmp/fdb-benchmark_$USER
 
 # file system where FDB will store the data
 fdb_root=/hpc/file/system/fdb_root
 
 # directory (shared or not) in the compute nodes where the benchmark and 
 # artifacts will be installed
-artifact_dir=$SCRATCH/fdb-hammer-parallel/artifacts
+artifact_dir=$SCRATCH/fdb-benchmark/artifacts
 
-# --- clone fdb-hammer-parallel
+# --- clone fdb-benchmark
 
 cd $SCRATCH
 
 mkdir git
 cd git
-git clone https://github.com/ecmwf/fdb-hammer-parallel.git
-cd fdb-hammer-parallel
+git clone https://github.com/ecmwf/fdb-benchmark.git
+cd fdb-benchmark
 git checkout feature/itt
 
 # --- build binaries
@@ -129,11 +129,11 @@ clush -w $ALL 'ls /tmp/$USER/'
 #rm -rf ${fdb_root?}
 
 # removes the artifacts installed by setup.sh
-#rm -rf ${SCRATCH?}/fdb-hammer-parallel
+#rm -rf ${SCRATCH?}/fdb-benchmark
 
 # removes the benchmark build
 #rm -rf ${build_root?}
 
 # removes the benchmark repository
-#rm -rf ${SCRATCH?}/git/fdb-hammer-parallel
+#rm -rf ${SCRATCH?}/git/fdb-benchmark
 ```

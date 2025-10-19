@@ -14,12 +14,12 @@ field_size="17.37MiB"
 ccsds=yes  # yes or no
 randomise_data=yes  # yes or no
 read_nodes_per_step=default
-root="$HOME/fdb-hammer-parallel"
+root="$HOME/fdb-benchmark"
 config=
 prolog_script=none
 check=no  # no, md, or full
 install=no  # yes or no
-artifact_dir='~/fdb-hammer-parallel/artifacts'
+artifact_dir='~/fdb-benchmark/artifacts'
 artifact_dir_is_shared=yes
 verbose=no
 
@@ -73,13 +73,13 @@ Available options:\n\n\
 --read-step-window <seconds>\n\nIf --itt is specified and MODE is 'read', --read-step-window deterimnes the number of seconds allowed for reader processes for a given step to perform the I/O. If this amount of time is not consumed during I/O, the processes sleep until it is fully consumed. If a process exceeds the window, it prints a message in stdout. Default: 10.\n\n\
 --read-random-delay <percent>\n\nIf --itt is specified and MODE is 'read', every reader process sleeps for a random amount of time between 0 and (--read-step-window * percent / 100) before starting I/O. Default: 0.\n\n\
 --prelist|--no-prelist\n\nIf --itt is specified and MODE is 'read', this flag enables/disables pre-listing of the locations of all fields to be read by every reader node. The first process in every reader node performs the pre-listing, splits the obtained field locations in as many subsets as --ppn-read, and every reader process is assigned one such subset for direct bulk data retrieval without listing. If this flag is disabled every reader process lists the fields of its assigned subset. Default: Enabled \n\n
---root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-hammer-parallel.\n\n\
+--root <path>\n\nPath to the root directory where the FDB and other repositories and binaries have been installed. Default: \$HOME/fdb-benchmark.\n\n\
 --config <path>\n\nPath to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node. Default: <root>/config.yaml.in.\n\n\
 --prolog-script <path>\n\nPath to a prolog script to be sourced first thing on each node in nodelist, for example to load required modules. Defaults to none.\n\n\
 --md-check\n\nFlag to enable metadata consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification.\n\n\
 --full-check\n\nFlag to enable metadata and data consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification. This option is more compute demanding than --md-check.\n\n\
 --install\n\nFlag to enable installation of fdb-hammer and other necessary binaries on the client nodes. It must be specified on the first run on a given set of client nodes, or if the binaries on these nodes need to be updated with new ones.\n\n\
---artifact-dir\n\nPath where to install binaries and artifacts on the client nodes. Use '~' to refer to the home directory on the nodes, but do not set artifact-dir to only '~'. Default: ~/fdb-hammer-parallel/artifacts.\n\n\
+--artifact-dir\n\nPath where to install binaries and artifacts on the client nodes. Use '~' to refer to the home directory on the nodes, but do not set artifact-dir to only '~'. Default: ~/fdb-benchmark/artifacts.\n\n\
 --artifact-dir-is-shared|--no-artifact-dir-is-shared\n\nFlag to be provided if the artifact directory on the client nodes is shared via a networked file system. Default: yes\n\n\
 --verbose\nPrint field identifiers archived or retrieved.\n\n\
 -h|--help\n\nshow this menu\

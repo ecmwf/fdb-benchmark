@@ -187,7 +187,7 @@ ecbuild_bundle( PROJECT eccodes         GIT "https://github.com/ecmwf/eccodes"  
 ecbuild_bundle( PROJECT eckit           GIT "https://github.com/ecmwf/eckit"                 TAG 1.32.2   UPDATE)
 ecbuild_bundle( PROJECT odc             GIT "https://github.com/ecmwf/odc"                   TAG 1.6.1   UPDATE)
 ecbuild_bundle( PROJECT metkit          GIT "https://github.com/ecmwf/metkit"                TAG 1.15.2   UPDATE)
-ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 03e5a1088e21a402adcd8bff87b37206fcb987c9 UPDATE)
+ecbuild_bundle( PROJECT fdb5            GIT "https://github.com/ecmwf/fdb"                   TAG 6afe3da7c66ea163ca177e58f8d4b1edcb38f96d UPDATE)
 
 ecbuild_bundle_finalize()
 EOF

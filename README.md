@@ -66,7 +66,7 @@ READERS=$(nodeset --split 2 -f $ALL | tail -n 1)
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     --verbose
 
-rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g:
+rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g:*
 
 # --- run contending writers and readers
 
@@ -100,7 +100,7 @@ sleep 20
 
 wait
 
-rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g:
+rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g:*
 
 # --- checklist after a benchmark run hangs or terminates abruptly
 

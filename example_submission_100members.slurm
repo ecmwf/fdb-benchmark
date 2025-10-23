@@ -1,0 +1,133 @@
+#!/bin/bash --login
+#SBATCH -p par
+#SBATCH -J fdb-benchmark-100members
+#SBATCH -o fdb-benchmark-100members-%j.out
+#SBATCH -N 372
+#SBATCH --ntasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=0
+##SBATCH --time=02:30:00
+#SBATCH --time=00:45:00
+
+pwd
+printenv | fgrep SLURM
+
+cd $SLURM_SUBMIT_DIR
+pwd
+
+set -eux
+
+nodes=$SLURM_JOB_NUM_NODES
+jobid=$SLURM_JOB_ID
+jobname=$SLURM_JOB_NAME
+
+writeppn=${1:-16}
+readppn=${2:-32}
+wnpm=${4:-3}
+rnm=${5:-2}
+members=${3:-100}
+readersinflight=36
+readersinflight=${6:-36}
+fdb_root=${7:-$WORKDIR/fdb_root_syim}
+
+wanted_readers=$(( $readersinflight * $rnm ))
+
+if [ $wnpm -eq 0 ] ; then
+   writernodes=$(( $nodes - $wanted_readers ))
+else
+   writernodes=$(($members * $wnpm))
+fi
+
+build_root=/tmp/$USER/fdb-hammer-parallel
+artifact_dir=$SCRATCH/fdb-hammer-parallel/artifacts
+write_file=write_${jobname}-${jobid}.out
+read_file=read_${jobname}-${jobid}.out
+
+./setup.sh \
+    --root $build_root \
+    --backend lustre \
+    --fdb-root $fdb_root
+
+ALL=$SLURM_JOB_NODELIST
+
+# Create a single nodeset for initial write
+ONE=$(nodeset --slice 1 -f $ALL)
+
+# Assign sequential blocks of nodes to each member, with blocks spread evenly across the nodelist
+ALL_NODES=($(nodeset -e $ALL))
+total_nodes=${#ALL_NODES[@]}
+blocks=$members
+block_size=$wnpm
+
+# Get starting indices for each member, spread across the nodelist
+START_INDICES=()
+for i in $(seq 0 $((blocks-1))); do
+    START_INDICES+=( $(( (i*total_nodes)/blocks )) )
+done
+
+WRITERS=""
+for idx in "${START_INDICES[@]}"; do
+    for ((j=0; j<block_size; j++)); do
+        node_index=$(( (idx + j) % total_nodes ))
+        WRITERS+="${ALL_NODES[$node_index]},"
+    done
+done
+WRITERS=${WRITERS%,}  # Remove trailing comma
+# Assign the rest of the nodes to readers
+READERS=$(nodeset -f "$ALL" -x "$WRITERS")
+
+# If there are more available nodes for readers than are required 
+# then use the pick command again to make READERS even
+READERS=$(nodeset -f --pick=$wanted_readers "$READERS")
+
+# Clean up any previous failed runs
+rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+
+# Initial write to set up the binaries
+./fdb-hammer.sh write \
+    --nodelist $ONE --ppn 1 --field-size 17.37MiB \
+    --nmembers default --nsteps 10 --nlevels 1 --nparams 1 \
+    --root $build_root --config $build_root/config.yaml.in \
+    --artifact-dir $artifact_dir --artifact-dir-is-shared \
+    --install --verbose
+
+# Re-clean to ensure no leftovers
+rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+
+# Set up the main benchmark args
+benchmark_args="--nodelist $WRITERS --ppn $writeppn \
+    --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnm \
+    --nmembers $members \
+    --root $build_root --config $build_root/config.yaml.in \
+    --artifact-dir $artifact_dir"
+
+echo "STARTING RUNS at $(date)"
+
+./fdb-hammer.sh write \
+    $benchmark_args \
+    > $write_file < /dev/null &
+
+# Time to wait before launching readers
+# 2 seconds per member to start up + 10 second step windoe + 20 seconds margin
+sleeptime=$((2 * $members + 10 + 20 ))  
+
+sleep $sleeptime
+
+./fdb-hammer.sh read \
+    $benchmark_args \
+    > $read_file < /dev/null &
+
+wait
+
+echo "===== WRITE OUTCOME ====="
+tail -n 9 $write_file
+echo "===== READ OUTCOME ====="
+tail -n 9 $read_file
+echo "===== FDB SIZE ====="
+du -h -s $fdb_root
+echo "ACTUAL SIZE OF FDB is $(du -s $fdb_root)"
+echo "===================="
+
+rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+
+exit $?

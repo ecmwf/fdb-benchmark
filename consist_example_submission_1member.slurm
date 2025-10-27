@@ -1,8 +1,8 @@
 #!/bin/bash --login
 #SBATCH -p par
-#SBATCH -J fdb-benchmark-100members
-#SBATCH -o fdb-benchmark-100members-%j.out
-#SBATCH -N 372
+#SBATCH -J fdb-benchmark-1member
+#SBATCH -o fdb-benchmark-1member-%j.out
+#SBATCH -N 9
 #SBATCH --ntasks-per-node=128
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=0
@@ -23,10 +23,10 @@ jobname=$SLURM_JOB_NAME
 
 writeppn=${1:-16}
 readppn=${2:-32}
-members=${3:-100}
+members=${3:-1}
 wnpm=${4:-3}
 rnpm=${5:-2}
-readersinflight=${6:-36}
+readersinflight=${6:-3}
 fdb_root=${7:-$WORKDIR/fdb_root_syim}
 
 wanted_readers=$(( $readersinflight * $rnpm ))
@@ -55,26 +55,8 @@ ALL=$(nodeset --output-format '%s.bullx' -f $ALL)
 
 ONE=$(nodeset --slice 1 -f $ALL)
 
-# Assign sequential blocks of nodes to each member, with blocks spread evenly across the nodelist
-ALL_NODES=($(nodeset -e $ALL))
-total_nodes=${#ALL_NODES[@]}
-blocks=$members
-block_size=$wnpm
-
-# Get starting indices for each member, spread across the nodelist
-START_INDICES=()
-for i in $(seq 0 $((blocks-1))); do
-    START_INDICES+=( $(( (i*total_nodes)/blocks )) )
-done
-
-WRITERS=""
-for idx in "${START_INDICES[@]}"; do
-    for ((j=0; j<block_size; j++)); do
-        node_index=$(( (idx + j) % total_nodes ))
-        WRITERS+="${ALL_NODES[$node_index]},"
-    done
-done
-WRITERS=${WRITERS%,}  # Remove trailing comma
+# Select the required number of writer nodes at random from the available nodes
+WRITERS=$(nodeset -f --pick=$writernodes "$ALL")
 # Assign the rest of the nodes to readers
 READERS=$(nodeset -f "$ALL" -x "$WRITERS")
 
@@ -97,11 +79,11 @@ rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
 rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
 
 # Set up the main benchmark args
-benchmark_args="--nodelist $WRITERS --ppn $writeppn \
+benchmark_args="--nodelist $WRITERS --ppn $writeppn --field-size 4.175MiB \
     --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
-    --nmembers $members \
+    --nmembers $members --nsteps 1 --nlevels 1 --nparams 1 \
     --root $build_root --config $build_root/config.yaml.in \
-    --artifact-dir $artifact_dir"
+    --artifact-dir $artifact_dir --no-itt --full-check --no-randomise-data"
 
 echo "STARTING RUNS at $(date)"
 

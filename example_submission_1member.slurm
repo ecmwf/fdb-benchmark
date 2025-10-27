@@ -49,7 +49,10 @@ read_file=read_${jobname}-${jobid}.out
 
 ALL=$SLURM_JOB_NODELIST
 
-# Create a single nodeset for initial write
+# This is needed on ECMWF systems to get the correct names in nodeset
+# but will be different on different systems
+ALL=$(nodeset --output-format '%s.bullx' -f $ALL)
+
 ONE=$(nodeset --slice 1 -f $ALL)
 
 # Select the required number of writer nodes at random from the available nodes

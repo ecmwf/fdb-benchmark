@@ -10,11 +10,11 @@ For this, fdb-BM-test uses the same write and read methods from the fdb library,
 ## Installation
 
 Clone the code form the GitHub repository and then checkout fdb-BM-test_v.1.0
-'''bash
+```bash
    git clone https://github.com/ecmwf/fdb-benchmark.git
    cd fdb-benchmark
-   git checkout fdb-BM-test_v.1.0
-'''
+   git checkout 1.0.0
+```
 
 Setup some build and install directories
 ```bash

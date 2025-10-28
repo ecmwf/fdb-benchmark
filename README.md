@@ -219,7 +219,9 @@ The number of writer nodes is derived from the size of the nodelist pass to `fdb
 * The script uses these calculations to assign processes on each node to specific members, ensuring all members are covered and distributed as evenly as possible.
 
 ## Command Line Arguments
-Below is a summary of all input arguments for `fdb-hammer.sh`, what they control, and their defaults:
+Below is a summary of all input arguments for `fdb-hammer.sh`, what they control, and their defaults.
+
+Note: the defaults shown here are the values defined in the top of the `fdb-hammer.sh` script; that script is the source of truth for runtime defaults. If you need to change a default permanently, update the variable in `fdb-hammer.sh`.
 
 ---
 
@@ -255,6 +257,14 @@ Below is a summary of all input arguments for `fdb-hammer.sh`, what they control
 ### `--field-size <size>`
 - Size of the GRIB field used for writes.  
   **Default:** `17.37MiB`
+
+### `--no-ccsds`
+- Disable CCSDS compression (enabled by default in the script). Use this flag to turn off CCSDS compression.
+- **Default (script):** CCSDS compression is enabled by default (`ccsds=yes`).
+
+### `--no-randomise-data`
+- Disable field data randomisation for writes (enabled by default in the script). Use this flag to keep seed data unchanged.
+- **Default (script):** Field data randomisation is enabled by default (`randomise_data=yes`).
 
 ### `--itt` / `--no-itt`
 - Enables or disables Interleaved Time-Triggered (ITT) mode for synchronized step-wise access.  
@@ -318,7 +328,7 @@ Below is a summary of all input arguments for `fdb-hammer.sh`, what they control
 
 ### `--root <path>`
 - Path to the root directory for binaries and artifacts.  
-  **Default:** `$HOME/fdb-hammer-parallel`
+  **Default (script):** `$HOME/fdb-benchmark`
 
 ### `--config <path>`
 - Path to the FDB client configuration file.  
@@ -342,7 +352,7 @@ Below is a summary of all input arguments for `fdb-hammer.sh`, what they control
 
 ### `--artifact-dir <path>`
 - Path to install binaries and artifacts on client nodes.  
-  **Default:** `~/fdb-hammer-parallel/artifacts`
+  **Default (script):** `~/fdb-benchmark/artifacts`
 
 ### `--artifact-dir-is-shared` / `--no-artifact-dir-is-shared`
 - Indicates whether the artifact directory is shared via a networked filesystem.  

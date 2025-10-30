@@ -9,7 +9,7 @@ For this, fdb-BM-test uses the same write and read methods from the fdb library,
 
 ## Installation
 
-Clone the code form the GitHub repository and then checkout fdb-BM-test_v.1.0
+Clone the code from the GitHub repository and then checkout tag 1.0.0
 ```bash
    git clone https://github.com/ecmwf/fdb-benchmark.git
    cd fdb-benchmark
@@ -46,11 +46,11 @@ Obtain the fdb source, build and install the binaries
     --fdb-root $fdb_root
 ```
 
-## Runnning fdb-BM-test
+## Running fdb-BM-test
 
 ### How fdb-BM-test works
 
-The fdb-BM-test is orchestrated by `fdb-hammer.sh` and parses the user paramemters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to `fdbh_one_node.sh` for each instance required. Finally, it then launches `fdbh_one_node.sh` on each node, either locally or via SSH, with all relevant arguments.
+The fdb-BM-test is orchestrated by `fdb-hammer.sh` and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to `fdbh_one_node.sh` for each instance required. Finally, it then launches `fdbh_one_node.sh` on each node, either locally or via SSH, with all relevant arguments.
 
 `fdbh_one_node.sh` takes the arguments and executes the benchmark workload on that node, handling CPU pinning, work distribution and running the `fdb-hammer` binary in parallel.
 
@@ -60,13 +60,13 @@ Separate instances of `fdb-hammer.sh` need to be run concurrently, with one hand
 
 ### Setting up the WRITERS and READERS
 
-The fdb-BM-test has been tested using the `nodeset` linux utility and the instructions below assume its availability. If `nodeset` isn't available or you have a different preferred utility, please consult its' instructions for functionality.
+The fdb-BM-test has been tested using the `nodeset` linux utility and the instructions below assume its availability. If `nodeset` isn't available or you have a different preferred utility, please consult its instructions for functionality.
 
 ```bash
 # Get the complete list of all nodes
 ALL=$JOB_NODELIST # Adjust for the scheduler used
 
-# Slice a single node off for the pre-liminary installation run
+# Slice a single node off for the preliminary installation run
 ONE=$(nodeset --slice 1 -f $ALL)
 ```
 
@@ -76,9 +76,9 @@ Below are three different ways to split the available nodes across the `WRITERS`
 
 #### Splitting across separate groups of coupled nodes
 
-If you have a situation where the nodes on the cluster are more connected for certain groups (e.g. nodes all on a single switch or within a leaf of a dragongly topology), then the techniques below can be used to split the nodes in the `WRITERS` and `READERS`.
+If you have a situation where the nodes on the cluster are more connected for certain groups (e.g. nodes all on a single switch or within a leaf of a dragonfly topology), then the techniques below can be used to split the nodes in the `WRITERS` and `READERS`.
 
-Here it is assumed that there are 5 groups of nodes and that there are 150 writer nodes you want to split so that there the same number of `WRITERS` per group:
+Here it is assumed that there are 5 groups of nodes and that there are 150 writer nodes you want to split so that there are the same number of `WRITERS` per group:
 
 ```bash
 NUMBER_OF_GROUPS=5
@@ -117,6 +117,38 @@ done
 # Convert to nodeset format
 WRITERS=$(printf "%s\n" "${GROUP_A[@]}" | nodeset -f)
 READERS=$(printf "%s\n" "${GROUP_B[@]}" | nodeset -f)
+```
+#### Splitting with writer nodes spread evenly across available nodes
+
+On large systems when the exact configuration of nodes on the network topology is unknown, then an even spread of writer nodes with nodes belonging to a member next to each other can be factored with code similar to that below:
+
+```bash
+# Assign sequential blocks of nodes to each member, with blocks spread evenly across the nodelist
+ALL_NODES=($(nodeset -e $ALL))
+total_nodes=${#ALL_NODES[@]}
+blocks=$members
+block_size=$wnpm
+
+# Get starting indices for each member, spread across the nodelist
+START_INDICES=()
+for i in $(seq 0 $((blocks-1))); do
+    START_INDICES+=( $(( (i*total_nodes)/blocks )) )
+done
+
+WRITERS=""
+for idx in "${START_INDICES[@]}"; do
+    for ((j=0; j<block_size; j++)); do
+        node_index=$(( (idx + j) % total_nodes ))
+        WRITERS+="${ALL_NODES[$node_index]},"
+    done
+done
+WRITERS=${WRITERS%,}  # Remove trailing comma
+# Assign the rest of the nodes to readers
+READERS=$(nodeset -f "$ALL" -x "$WRITERS")
+
+# If there are more available nodes for readers than are required 
+# then use the pick command again to make READERS even
+READERS=$(nodeset -f --pick=$wanted_readers "$READERS")
 ```
 
 #### Splitting nodes evenly when writer nodes equals reader nodes
@@ -158,12 +190,32 @@ Run a small single-process run to install binaries to compute nodes. It also act
     --install --verbose
 
 # Clean the FDB afterwards
-rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root?}/rd*
 ```
-It is recommeneded to do this before every main run to ensure the binaries are in the right place.
+It is recommended to do this before every main run to ensure the binaries are in the right place.
 
 >NOTE: if --install and --artifact-dir-is-shared, and --nodelist has more than one 
 >node, all nodes other than the first may fail due to libraries not being found
+
+## Example SLURM Submission Scripts
+
+The repository includes several example SLURM submission scripts that demonstrate different configurations:
+
+- **`example_submission_1member.slurm`**: Basic example for testing with 1 member (9 nodes total)
+- **`example_submission_100members.slurm`**: Large-scale example for 100 members (372 nodes total)  
+- **`example_submission_155members.slurm`**: Large-scale example for 155 members (555 nodes total)
+- **`consist_example_submission_1member.slurm`**: Consistency checking example (9 nodes total)
+
+These scripts show how to:
+- Calculate and allocate writer and reader nodes based on member count
+- Set up proper node assignment patterns for large member counts
+- Configure timing and synchronization between write and read operations
+- Handle consistency checking configurations
+
+The scripts use parameterized defaults that can be overridden via command line arguments:
+```bash
+sbatch example_submission_100members.slurm [writeppn] [readppn] [members] [wnpm] [rnpm] [readersinflight] [fdb_root]
+```
 
 ## Main runs
 
@@ -193,13 +245,13 @@ By default `memberdelay=2` and `stepwindow=10`
 sleep $first_step_complete
 
 ./fdb-hammer.sh read \
-    $benchmark_args$ \
+    $benchmark_args \
     > read.out < /dev/null &
 
 wait
 
 # OPTIONAL - clean the fdb
-rm -rf ${fdb_root?}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root?}/rd*
 ```
 
 ### Changing the FDB directory for a particular run
@@ -212,7 +264,7 @@ new_fdb_root=/path/to/new/fdb_root
 ```
 ### Running Multiple Writers on one node
 
-The number of writer nodes is derived from the size of the nodelist pass to `fdb-hammer.sh` and the number of members. 
+The number of writer nodes is derived from the size of the nodelist passed to `fdb-hammer.sh` and the number of members. 
 
 * If the number of members (nmembers) is greater than the number of nodes, each node will handle multiple members. The script calculates how many members per node by dividing nmembers by the number of nodes.
 * If the number of nodes is greater than the number of members, multiple nodes may share the same member.
@@ -383,18 +435,27 @@ If these conditions are not met, the script will abort with an error message to 
 
 It is important that, not only, that the storage subsystem is able to manage the demands of the ECMWF operational workflow but also that it does so whilst ensuring the correctness of data.
 
-Therefore, it is also required to do a separate run with consistency checks enabled that ensures the correctness of data is maintained. Enabling these checks affects performance and so no timimg data is required for these runs.
+Therefore, it is also required to do a separate run with consistency checks enabled that ensures the correctness of data is maintained. Enabling these checks affects performance and so no timing data is required for these runs.
+
+The consistency checking example can be found in `consist_example_submission_1member.slurm`, which shows the proper configuration:
 
 ```bash
 # To enable consistency checks change the benchmark_args to the following:
-benchmark_args="--nodelist $WRITERS --ppn $writeppn \
+benchmark_args="--nodelist $WRITERS --ppn $writeppn --field-size 17.37MiB \
     --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
-    --nmembers $members \
+    --nmembers $members --nsteps 90 --nlevels 120 --nparams 6 \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir --no-itt --full-check --no-randomise-data --no-prelist"
 ```
 
-> NOTE: This disables the random ordering of a ITT benchmark run and makes the reading deterministic
+> NOTE: This disables the random ordering of an ITT benchmark run and makes the reading deterministic. The consistency checker also requires a longer delay before starting readers to ensure sufficient writes have completed.
+
+```bash
+# Example calculation for sleep time before read runs start:
+# 8 * $member_delay + step-window + safety_margin
+# e.g.
+sleeptime=$((8 * 2 + 10 + 200))
+```
 
 ## Clean-up procedure
 

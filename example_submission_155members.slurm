@@ -2,7 +2,7 @@
 #SBATCH -p par
 #SBATCH -J fdb-benchmark-155members
 #SBATCH -o fdb-benchmark-155members-%j.out
-#SBATCH -N 573
+#SBATCH -N 555
 #SBATCH --ntasks-per-node=128
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=0
@@ -21,15 +21,20 @@ nodes=$SLURM_JOB_NUM_NODES
 jobid=$SLURM_JOB_ID
 jobname=$SLURM_JOB_NAME
 
+build_root=/ec/res4/hpcperm/syim/new-fdb-hammer-parallel_syim
+artifact_dir=/ec/res4/scratch/syim/new-fdb-hammer-parallel/artifacts
+
+
 writeppn=${1:-16}
 readppn=${2:-32}
 members=${3:-155}
 wnpm=${4:-3}
-rnm=${5:-2}
-readersinflight=${6:-54}
+rnpm=${5:-2}
+readersinflight=${6:-45}
 fdb_root=${7:-$WORKDIR/fdb_root_syim}
+config_file=${8:-$build_root/config.yaml.in}
 
-wanted_readers=$(( $readersinflight * $rnm ))
+wanted_readers=$(( $readersinflight * $rnpm ))
 
 if [ $wnpm -eq 0 ] ; then
    writernodes=$(( $nodes - $wanted_readers ))
@@ -37,8 +42,6 @@ else
    writernodes=$(($members * $wnpm))
 fi
 
-build_root=/tmp/$USER/fdb-hammer-parallel
-artifact_dir=$SCRATCH/fdb-hammer-parallel/artifacts
 write_file=write_${jobname}-${jobid}.out
 read_file=read_${jobname}-${jobid}.out
 
@@ -49,7 +52,10 @@ read_file=read_${jobname}-${jobid}.out
 
 ALL=$SLURM_JOB_NODELIST
 
-# Create a single nodeset for initial write
+# This is needed on ECMWF systems to get the correct names in nodeset
+# but will be different on different systems
+ALL=$(nodeset --output-format '%s.bullx' -f $ALL)
+
 ONE=$(nodeset --slice 1 -f $ALL)
 
 # Assign sequential blocks of nodes to each member, with blocks spread evenly across the nodelist
@@ -80,24 +86,24 @@ READERS=$(nodeset -f "$ALL" -x "$WRITERS")
 READERS=$(nodeset -f --pick=$wanted_readers "$READERS")
 
 # Clean up any previous failed runs
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 # Initial write to set up the binaries
 ./fdb-hammer.sh write \
     --nodelist $ONE --ppn 1 --field-size 17.37MiB \
     --nmembers default --nsteps 10 --nlevels 1 --nparams 1 \
-    --root $build_root --config $build_root/config.yaml.in \
+    --root $build_root --config $onfig_file\
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     --install --verbose
 
 # Re-clean to ensure no leftovers
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 # Set up the main benchmark args
 benchmark_args="--nodelist $WRITERS --ppn $writeppn \
-    --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnm \
+    --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
     --nmembers $members \
-    --root $build_root --config $build_root/config.yaml.in \
+    --root $build_root --config $config_file\
     --artifact-dir $artifact_dir"
 
 echo "STARTING RUNS at $(date)"
@@ -127,6 +133,7 @@ du -h -s $fdb_root
 echo "ACTUAL SIZE OF FDB is $(du -s $fdb_root)"
 echo "===================="
 
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+# Clean up after ourselves
+rm -rf ${fdb_root}/rd*
 
 exit $?

@@ -65,7 +65,7 @@ READERS=$(nodeset -f "$ALL" -x "$WRITERS")
 READERS=$(nodeset -f --pick=$wanted_readers "$READERS")
 
 # Clean up any previous failed runs
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 # Initial write to set up the binaries
 ./fdb-hammer.sh write \
@@ -76,7 +76,7 @@ rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
     --install --verbose
 
 # Re-clean to ensure no leftovers
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 # Set up the main benchmark args
 benchmark_args="--nodelist $WRITERS --ppn $writeppn \
@@ -113,6 +113,6 @@ echo "ACTUAL SIZE OF FDB is $(du -s $fdb_root)"
 echo "===================="
 
 # Clean up after ourselves
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 exit $?

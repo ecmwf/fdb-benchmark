@@ -65,7 +65,7 @@ READERS=$(nodeset -f "$ALL" -x "$WRITERS")
 READERS=$(nodeset -f --pick=$wanted_readers "$READERS")
 
 # Clean up any previous failed runs
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 # Initial write to set up the binaries
 ./fdb-hammer.sh write \
@@ -76,14 +76,14 @@ rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
     --install --verbose
 
 # Re-clean to ensure no leftovers
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 # Set up the main benchmark args
-benchmark_args="--nodelist $WRITERS --ppn $writeppn --field-size 4.175MiB \
+benchmark_args="--nodelist $WRITERS --ppn $writeppn --field-size 17.37MiB \
     --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
-    --nmembers $members --nsteps 1 --nlevels 1 --nparams 1 \
+    --nmembers $members --nsteps 90 --nlevels 120 --nparams 6 \
     --root $build_root --config $build_root/config.yaml.in \
-    --artifact-dir $artifact_dir --no-itt --full-check --no-randomise-data"
+    --artifact-dir $artifact_dir --no-itt --full-check --no-randomise-data --no-prelist"
 
 echo "STARTING RUNS at $(date)"
 
@@ -92,8 +92,9 @@ echo "STARTING RUNS at $(date)"
     > $write_file < /dev/null &
 
 # Time to wait before launching readers
-# 2 seconds per member to start up + 10 second step windoe + 20 seconds margin
-sleeptime=$((2 * $members + 10 + 20 ))  
+# Consistency checker requires more writes to have finished so have longer delay
+# 16 seconds per member to start up + 10 second step windoe + 200 seconds margin
+sleeptime=$((16 * $members + 10 + 200 ))  
 
 sleep $sleeptime
 
@@ -113,6 +114,6 @@ echo "ACTUAL SIZE OF FDB is $(du -s $fdb_root)"
 echo "===================="
 
 # Clean up after ourselves
-rm -rf ${fdb_root}/rd:xxxx:enfo:20230713:0000:g
+rm -rf ${fdb_root}/rd*
 
 exit $?

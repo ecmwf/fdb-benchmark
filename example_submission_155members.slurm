@@ -92,7 +92,7 @@ rm -rf ${fdb_root}/rd*
 ./fdb-hammer.sh write \
     --nodelist $ONE --ppn 1 --field-size 17.37MiB \
     --nmembers default --nsteps 10 --nlevels 1 --nparams 1 \
-    --root $build_root --config $onfig_file\
+    --root $build_root --config $config_file \
     --artifact-dir $artifact_dir --artifact-dir-is-shared \
     --install --verbose
 
@@ -103,7 +103,7 @@ rm -rf ${fdb_root}/rd*
 benchmark_args="--nodelist $WRITERS --ppn $writeppn \
     --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
     --nmembers $members \
-    --root $build_root --config $config_file\
+    --root $build_root --config $config_file \
     --artifact-dir $artifact_dir"
 
 echo "STARTING RUNS at $(date)"

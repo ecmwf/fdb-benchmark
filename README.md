@@ -231,139 +231,139 @@ Note: the defaults shown here are the values defined in the top of the `fdb-hamm
 - Only `write` and `read` are needed for ITT380.
 
 ### `--nodelist <list>`
-- Node list of where to run writer processes.  (Tested with Slurm syntax)
-  **Default:** local host name.
+- Node list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[001-010]. Do not use 'localhost' in this list, use the local host name if needed.
+  **Default:** a list containing the local host name only (as provided by hostname).
 
 ### `--ppn <ppn>`
-- Number of parallel processes per node for `WRITERS`.  
+- Number of fdb-hammer processes to run on every client node in the provided node list.  
   **Default:** `1`
 
 ### `--nmembers <nmembers>`
-- Total number of members to archive/retrieve.  
-  **Default:** one per node in `--nodelist` (or set to `default`).
+- Total number of members to archive/retrieve by all client nodes and process. It must be a multiple or submultiple of the number of nodes in the nodelist. If larger than the number of nodes, a node will produce/consume data for more than one member. If smaller, multiple nodes will produce/consume data for a same member.
+  **Default:** one per node in --nodelist (this default behaviour can be triggered by providing no value or with --nmembers default).
 
 ### `--nsteps <nsteps>`
-- Number of steps to archive or retrieve per process.  
+- Number of steps to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for steps 1 to nsteps.
   **Default:** `90`
 
 ### `--nlevels <nlevels>`
-- Number of levels to archive or retrieve per process.  
+- Number of levels to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', every parallel process in a member archives nlevels unique levels.
   **Default:** `120`
 
 ### `--nparams <nparams>`
-- Number of parameters to archive or retrieve per process.  
+- Number of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params.
   **Default:** `6`
 
 ### `--field-size <size>`
-- Size of the GRIB field used for writes.  
+- Size of the GRIB field to be used as seed for all writes.
   **Default:** `17.37MiB`
 
 ### `--no-ccsds`
-- Disable CCSDS compression (enabled by default in the script). Use this flag to turn off CCSDS compression.
-- **Default (script):** CCSDS compression is enabled by default (`ccsds=yes`).
+- Flag to disable CCSDS compression.
+  **Default (script):** CCSDS compression is enabled by default (`ccsds=yes`).
 
 ### `--no-randomise-data`
-- Disable field data randomisation for writes (enabled by default in the script). Use this flag to keep seed data unchanged.
-- **Default (script):** Field data randomisation is enabled by default (`randomise_data=yes`).
+- Flag to disable field data randomisation (if MODE is 'write'). By default, the data of every field written is randomised with decimal values between 0 and 1.
+  **Default (script):** Field data randomisation is enabled by default (`randomise_data=yes`).
 
 ### `--itt` / `--no-itt`
-- Enables or disables Interleaved Time-Triggered (ITT) mode for synchronized step-wise access.  
-  **Default:** enabled
+- Flag to enable/disable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps). When --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.
+  **Default:** Enabled
 
 ### `--nodelist-read <list>`
-- Node list for reader processes in ITT read mode.  
+- If MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.
   **Default:** not set (required in ITT read mode)
 
 ### `--ppn-read <ppn>`
-- Number of reader processes per node in ITT read mode.  
+- If MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.
   **Default:** not set (required in ITT read mode)
 
 ### `--read-nodes-per-step <nnodes>`
-- Number of reader nodes per step in ITT read mode.  
-  **Default:** `1` (or calculated based on steps and nodes)
+- If --itt is specified and MODE is 'read', --read-nodes-per-step determines the number of reader nodes to employ for reading data for every written step. It must be equal or smaller than the number of nodes in --nodelist-read. If smaller, it must be a divisor.
+  **Default:** one node in --nodelist-read per step if --nsteps is greater than or equal to the number of nodes in the nodelist, or length(--nodelist-read) / --nsteps otherwise (this default behaviour can be triggered by providing no value or with --read-nodes-per-step default).
 
 ### `--barrier-port <port>`
-- Port for writer node barrier synchronization in ITT write mode.  
+- If --itt is specified and MODE is 'write', the port specified in --port will be used on the first writer node to listen for peer nodes to barrier.
   **Default:** `7777`
 
 ### `--barrier-max-wait <seconds>`
-- Maximum wait time for barrier synchronization in ITT write mode.  
+- If --itt is specified and MODE is 'write', --barrier-max-wait determines the number of seconds to wait for peer nodes during barriers before aborting.
   **Default:** `10`
 
 ### `--poll-period <period>`
-- Polling interval (seconds) for reader processes in ITT read mode.  
+- If --itt is specified and MODE is 'read', --poll-period determines the number of seconds between list/polling retries in reader processes.
   **Default:** `10`
 
 ### `--poll-max-attempts <attempts>`
-- Maximum polling attempts before failure in ITT read mode.  
+- If --itt is specified and MODE is 'read', --poll-max-attempts determines the maximum number of list retries before failing.
   **Default:** `200`
 
 ### `--member-delay <seconds>`
-- Delay between launching writer processes for different members in ITT write mode.  
+- If --itt is specified and MODE is 'write', writer processes for a given member are launched with a delay of 'seconds' seconds after the processes for the previous member. Decimal numbers supported.
   **Default:** `2`
 
 ### `--reader-delay <seconds>`
-- Delay between launching reader processes for different steps in ITT read mode.  
+- If --itt is specified and MODE is 'read', reader processes for a given step are launched with a delay of 'seconds' seconds after the processes for the previous step. Decimal numbers supported.
   **Default:** `0`
 
 ### `--step-window <seconds>`
-- Time window allowed per writer process for each step in ITT write mode.  
+- If --itt is specified and MODE is 'write', --step-window determines the number of seconds allowed per writer process to perform the I/O for a step. If this amount of time is not consumed during I/O, the process sleeps until it is fully consumed. If the window is exceeded, the process prints a message in stdout.
   **Default:** `10`
 
 ### `--random-delay <percent>`
-- Random delay (as a percent of `--step-window`) before writer I/O in ITT write mode.  
+- If --itt is specified and MODE is 'write', every writer process sleeps for a random amount of time between 0 and (--step-window * percent / 100) before starting I/O.
   **Default:** `100`
 
 ### `--read-step-window <seconds>`
-- Time window allowed per reader process for each step in ITT read mode.  
+- If --itt is specified and MODE is 'read', --read-step-window determines the number of seconds allowed for reader processes for a given step to perform the I/O. If this amount of time is not consumed during I/O, the processes sleep until it is fully consumed. If a process exceeds the window, it prints a message in stdout.
   **Default:** `10`
 
 ### `--read-random-delay <percent>`
-- Random delay (as a percent of `--read-step-window`) before reader I/O in ITT read mode.  
+- If --itt is specified and MODE is 'read', every reader process sleeps for a random amount of time between 0 and (--read-step-window * percent / 100) before starting I/O.
   **Default:** `0`
 
 ### `--prelist` / `--no-prelist`
-- Enables or disables pre-listing of field locations for reader nodes in ITT read mode.  
-  **Default:** enabled
+- If --itt is specified and MODE is 'read', this flag enables/disables pre-listing of the locations of all fields to be read by every reader node. The first process in every reader node performs the pre-listing, splits the obtained field locations in as many subsets as --ppn-read, and every reader process is assigned one such subset for direct bulk data retrieval without listing. If this flag is disabled every reader process lists the fields of its assigned subset.
+  **Default:** Enabled
 
 ### `--root <path>`
-- Path to the root directory for binaries and artifacts.  
-  **Default (script):** `$HOME/fdb-benchmark`
+- Path to the root directory where the FDB and other repositories and binaries have been installed.
+  **Default:** `$HOME/fdb-benchmark`
 
 ### `--config <path>`
-- Path to the FDB client configuration file.  
+- Path to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node.
   **Default:** `<root>/config.yaml.in`
 
 ### `--prolog-script <path>`
-- Path to a script sourced on each node before running the workload.  
-  **Default:** `none`
+- Path to a prolog script to be sourced first thing on each node in nodelist, for example to load required modules.
+  **Default:** none
 
 ### `--md-check`
-- Enables metadata consistency checks during reading.  
+- Flag to enable metadata consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification.
   **Default:** disabled
 
 ### `--full-check`
-- Enables full data and metadata consistency checks during reading.  
+- Flag to enable metadata and data consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification. This option is more compute demanding than --md-check.
   **Default:** disabled
 
 ### `--install`
-- Installs required binaries and artifacts on client nodes.  
+- Flag to enable installation of fdb-hammer and other necessary binaries on the client nodes. It must be specified on the first run on a given set of client nodes, or if the binaries on these nodes need to be updated with new ones.
   **Default:** disabled
 
 ### `--artifact-dir <path>`
-- Path to install binaries and artifacts on client nodes.  
-  **Default (script):** `~/fdb-benchmark/artifacts`
+- Path where to install binaries and artifacts on the client nodes. Use '~' to refer to the home directory on the nodes, but do not set artifact-dir to only '~'.
+  **Default:** `~/fdb-benchmark/artifacts`
 
 ### `--artifact-dir-is-shared` / `--no-artifact-dir-is-shared`
-- Indicates whether the artifact directory is shared via a networked filesystem.  
-  **Default:** enabled
+- Flag to be provided if the artifact directory on the client nodes is shared via a networked file system.
+  **Default:** yes
 
 ### `--verbose`
-- Enables verbose output, printing field identifiers archived or retrieved.  
+- Print field identifiers archived or retrieved.
   **Default:** disabled
 
 ### `-h`, `--help`
-- Shows the help menu and usage instructions.
+- show this menu
 
 ---
 
@@ -381,8 +381,6 @@ If these conditions are not met, the script will abort with an error message to 
 
 ## Running Consistency Checks
 
->TODO: Fix errors that prevent this from working at the moment
-
 It is important that, not only, that the storage subsystem is able to manage the demands of the ECMWF operational workflow but also that it does so whilst ensuring the correctness of data.
 
 Therefore, it is also required to do a separate run with consistency checks enabled that ensures the correctness of data is maintained. Enabling these checks affects performance and so no timimg data is required for these runs.
@@ -393,7 +391,7 @@ benchmark_args="--nodelist $WRITERS --ppn $writeppn \
     --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
     --nmembers $members \
     --root $build_root --config $build_root/config.yaml.in \
-    --artifact-dir $artifact_dir --no-itt --full-check"
+    --artifact-dir $artifact_dir --no-itt --full-check --no-randomise-data --no-prelist"
 ```
 
 > NOTE: This disables the random ordering of a ITT benchmark run and makes the reading deterministic

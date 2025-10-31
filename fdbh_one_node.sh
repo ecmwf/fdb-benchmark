@@ -432,6 +432,8 @@ EOF
                 $tmp_dir/sample_field \
                 $mode_arg \
                 --itt \
+                --ppn=${ppn} \
+                --nodes=${num_nodes} \
                 --poll-period=$poll_period \
                 --poll-max-attempts=$poll_max_attempts \
                 --class=rd \

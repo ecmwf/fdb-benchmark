@@ -1,0 +1,651 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FDB Benchmark Test Documentation</title>
+    <style>
+        /* Print-friendly CSS */
+        @media print {
+            body {
+                font-size: 12pt;
+                line-height: 1.4;
+                color: black;
+                background: white;
+            }
+            h1, h2, h3, h4, h5, h6 {
+                break-after: avoid;
+                page-break-after: avoid;
+            }
+            pre, code {
+                font-size: 10pt;
+                background: #f5f5f5 !important;
+                border: 1px solid #ccc;
+                padding: 5px;
+                break-inside: avoid;
+            }
+            table {
+                break-inside: avoid;
+                border-collapse: collapse;
+                width: 100%;
+            }
+            th, td {
+                border: 1px solid #ccc;
+                padding: 5px;
+                text-align: left;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+        }
+        
+        /* Screen CSS */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: #2c3e50;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        
+        h1 {
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        h2 {
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 5px;
+        }
+        
+        code {
+            background: #f8f9fa;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+        
+        pre code {
+            background: none;
+            padding: 0;
+            border-radius: 0;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        blockquote {
+            border-left: 4px solid #3498db;
+            margin: 1em 0;
+            padding-left: 1em;
+            color: #666;
+        }
+        
+        ul, ol {
+            padding-left: 2em;
+        }
+        
+        li {
+            margin: 0.5em 0;
+        }
+        
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .toc {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .print-instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        @media print {
+            .print-instructions {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-instructions">
+        <h3>📄 PDF Generation Instructions</h3>
+        <p><strong>To create README.pdf:</strong></p>
+        <ol>
+            <li>Use your browser's Print function (Cmd+P on macOS, Ctrl+P on Windows/Linux)</li>
+            <li>Select "Save as PDF" as the destination</li>
+            <li>Save as "README.pdf" in the project directory</li>
+            <li>Ensure all pages are included and formatting looks correct</li>
+        </ol>
+        <p><em>This instruction box will not appear in the printed PDF.</em></p>
+    </div>
+    
+<h1 id="fdb-bm-test">fdb-BM-test</h1>
+<p>The fdb-BM-test is used to simulate the quality and quantity of filesystem I/O operations in ECMWF’s time-critical workflows. </p>
+<p>The test writes synthetic forecast output fields from a number of concurrent writer processes executing on compute nodes.</p>
+<p>At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for “product generation”, “pgen” post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
+For this, fdb-BM-test uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up. </p>
+<h2 id="installation">Installation</h2>
+<p>Clone the code from the GitHub repository and then checkout tag 1.0.0</p>
+<div class="codehilite"><pre><span></span><code><span class="w">   </span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ecmwf/fdb-benchmark.git
+<span class="w">   </span><span class="nb">cd</span><span class="w"> </span>fdb-benchmark
+<span class="w">   </span>git<span class="w"> </span>checkout<span class="w"> </span><span class="m">1</span>.0.0
+</code></pre></div>
+
+<p>Setup some build and install directories</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># where the benchmark source will be cloned and the binaries installed</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">install_dir</span><span class="o">=</span>/hpc/file/system/install_dir
+
+<span class="c1"># fast file system where the benchmark will be built before installing</span>
+<span class="nv">build_root</span><span class="o">=</span>/tmp/fdb-benchmark_<span class="nv">$USER</span>
+
+<span class="c1"># file system where FDB will store the data</span>
+<span class="nv">fdb_root</span><span class="o">=</span>/hpc/file/system/fdb_root
+
+<span class="c1"># directory (shared or not) in the compute nodes where the benchmark and </span>
+<span class="c1"># artifacts will be installed</span>
+<span class="nv">artifact_dir</span><span class="o">=</span><span class="nv">$SCRATCH</span>/fdb-benchmark/artifacts
+
+<span class="c1"># create directories</span>
+
+mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$artifact_dir</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$fdb_root</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$TMPDIR</span>
+</code></pre></div>
+
+<p>Obtain the fdb source, build and install the binaries</p>
+<div class="codehilite"><pre><span></span><code>./setup.sh<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--root<span class="w"> </span><span class="nv">$build_root</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--backend<span class="w"> </span>lustre<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--fdb-root<span class="w"> </span><span class="nv">$fdb_root</span>
+</code></pre></div>
+
+<h2 id="running-fdb-bm-test">Running fdb-BM-test</h2>
+<h3 id="how-fdb-bm-test-works">How fdb-BM-test works</h3>
+<p>The fdb-BM-test is orchestrated by <code>fdb-hammer.sh</code> and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to <code>fdbh_one_node.sh</code> for each instance required. Finally, it then launches <code>fdbh_one_node.sh</code> on each node, either locally or via SSH, with all relevant arguments.</p>
+<p><code>fdbh_one_node.sh</code> takes the arguments and executes the benchmark workload on that node, handling CPU pinning, work distribution and running the <code>fdb-hammer</code> binary in parallel.</p>
+<p>After all nodes finish <code>fdb-hammer.sh</code> collects output, aggregates results and prints summary statistics.</p>
+<p>Separate instances of <code>fdb-hammer.sh</code> need to be run concurrently, with one handling the setup and running of the <code>WRITERS</code> and another handling the setup and running of the <code>READERS</code>.</p>
+<h3 id="setting-up-the-writers-and-readers">Setting up the WRITERS and READERS</h3>
+<p>The fdb-BM-test has been tested using the <code>nodeset</code> linux utility and the instructions below assume its availability. If <code>nodeset</code> isn't available or you have a different preferred utility, please consult its instructions for functionality.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Get the complete list of all nodes</span>
+<span class="nv">ALL</span><span class="o">=</span><span class="nv">$JOB_NODELIST</span><span class="w"> </span><span class="c1"># Adjust for the scheduler used</span>
+
+<span class="c1"># Slice a single node off for the preliminary installation run</span>
+<span class="nv">ONE</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>--slice<span class="w"> </span><span class="m">1</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$ALL</span><span class="k">)</span>
+</code></pre></div>
+
+<p>The test is best run when the <code>WRITERS</code> are evenly distributed across the available nodes, as this replicates the way an operational ensemble is run. This is not a requirement for testing but could be for acceptance testing. </p>
+<p>Below are three different ways to split the available nodes across the <code>WRITERS</code> and <code>READERS</code>.</p>
+<h4 id="splitting-across-separate-groups-of-coupled-nodes">Splitting across separate groups of coupled nodes</h4>
+<p>If you have a situation where the nodes on the cluster are more connected for certain groups (e.g. nodes all on a single switch or within a leaf of a dragonfly topology), then the techniques below can be used to split the nodes in the <code>WRITERS</code> and <code>READERS</code>.</p>
+<p>Here it is assumed that there are 5 groups of nodes and that there are 150 writer nodes you want to split so that there are the same number of <code>WRITERS</code> per group:</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">NUMBER_OF_GROUPS</span><span class="o">=</span><span class="m">5</span>
+<span class="nv">NUMBER_OF_WRITER_NODES</span><span class="o">=</span><span class="m">150</span><span class="w"> </span><span class="c1"># Must be a multiple of the number of groups</span>
+
+<span class="c1"># Calculate the number of writers per group</span>
+<span class="nv">WRITERS_PER_GROUP</span><span class="o">=</span><span class="k">$((</span><span class="w"> </span><span class="nv">$NUMBER_OF_WRITER_NODES</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nv">$NUMBER_OF_GROUPS</span><span class="w"> </span><span class="k">))</span>
+
+<span class="c1"># Expand ALL to full list of node names</span>
+<span class="nv">ALL_NODES</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ALL</span><span class="s2">&quot;</span><span class="k">)</span>
+
+<span class="c1"># Convert to array</span>
+<span class="nv">NODE_ARR</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="nv">$ALL_NODES</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s:,: :g&#39;</span><span class="k">)</span>
+
+<span class="nv">NODE_ARRAY</span><span class="o">=(</span><span class="nv">$NODE_ARR</span><span class="o">)</span>
+
+<span class="c1"># Initialize groups</span>
+<span class="nv">GROUP_A</span><span class="o">=()</span>
+<span class="nv">GROUP_B</span><span class="o">=()</span>
+
+<span class="c1"># Create associative array to track counts per prefix</span>
+<span class="nb">declare</span><span class="w"> </span>-A<span class="w"> </span>PREFIX_COUNTS
+
+<span class="c1"># Loop through all nodes</span>
+<span class="k">for</span><span class="w"> </span>NODE<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">NODE_ARRAY</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span><span class="nv">PREFIX</span><span class="o">=</span><span class="si">${</span><span class="nv">NODE</span><span class="p">:</span><span class="nv">0</span><span class="p">:</span><span class="nv">3</span><span class="si">}</span><span class="w">  </span><span class="c1"># Adjust if needed for your naming scheme</span>
+<span class="w">    </span><span class="nv">COUNT</span><span class="o">=</span><span class="si">${</span><span class="nv">PREFIX_COUNTS</span><span class="p">[</span><span class="nv">$PREFIX</span><span class="p">]</span><span class="k">:-</span><span class="nv">0</span><span class="si">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">[[</span><span class="w"> </span><span class="nv">$COUNT</span><span class="w"> </span>-lt<span class="w"> </span><span class="nv">$WRITERS_PER_GROUP</span><span class="w"> </span><span class="o">]]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">        </span><span class="nv">GROUP_A</span><span class="o">+=(</span><span class="s2">&quot;</span><span class="nv">$NODE</span><span class="s2">&quot;</span><span class="o">)</span>
+<span class="w">    </span><span class="k">else</span>
+<span class="w">        </span><span class="nv">GROUP_B</span><span class="o">+=(</span><span class="s2">&quot;</span><span class="nv">$NODE</span><span class="s2">&quot;</span><span class="o">)</span>
+<span class="w">    </span><span class="k">fi</span>
+<span class="w">    </span>PREFIX_COUNTS<span class="o">[</span><span class="nv">$PREFIX</span><span class="o">]=</span><span class="k">$((</span><span class="nv">COUNT</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="m">1</span><span class="k">))</span>
+<span class="k">done</span>
+
+<span class="c1"># Convert to nodeset format</span>
+<span class="nv">WRITERS</span><span class="o">=</span><span class="k">$(</span><span class="nb">printf</span><span class="w"> </span><span class="s2">&quot;%s\n&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">GROUP_A</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nodeset<span class="w"> </span>-f<span class="k">)</span>
+<span class="nv">READERS</span><span class="o">=</span><span class="k">$(</span><span class="nb">printf</span><span class="w"> </span><span class="s2">&quot;%s\n&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">GROUP_B</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nodeset<span class="w"> </span>-f<span class="k">)</span>
+</code></pre></div>
+
+<h4 id="splitting-with-writer-nodes-spread-evenly-across-available-nodes">Splitting with writer nodes spread evenly across available nodes</h4>
+<p>On large systems when the exact configuration of nodes on the network topology is unknown, then an even spread of writer nodes with nodes belonging to a member next to each other can be factored with code similar to that below:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Assign sequential blocks of nodes to each member, with blocks spread evenly across the nodelist</span>
+<span class="nv">ALL_NODES</span><span class="o">=(</span><span class="k">$(</span>nodeset<span class="w"> </span>-e<span class="w"> </span><span class="nv">$ALL</span><span class="k">)</span><span class="o">)</span>
+<span class="nv">total_nodes</span><span class="o">=</span><span class="si">${#</span><span class="nv">ALL_NODES</span><span class="p">[@]</span><span class="si">}</span>
+<span class="nv">blocks</span><span class="o">=</span><span class="nv">$members</span>
+<span class="nv">block_size</span><span class="o">=</span><span class="nv">$wnpm</span>
+
+<span class="c1"># Get starting indices for each member, spread across the nodelist</span>
+<span class="nv">START_INDICES</span><span class="o">=()</span>
+<span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="k">$((</span><span class="nv">blocks</span><span class="o">-</span><span class="m">1</span><span class="k">)))</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span><span class="nv">START_INDICES</span><span class="o">+=(</span><span class="w"> </span><span class="k">$((</span><span class="w"> </span><span class="o">(</span><span class="nv">i</span><span class="o">*</span><span class="nv">total_nodes</span><span class="o">)/</span><span class="nv">blocks</span><span class="w"> </span><span class="k">))</span><span class="w"> </span><span class="o">)</span>
+<span class="k">done</span>
+
+<span class="nv">WRITERS</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
+<span class="k">for</span><span class="w"> </span>idx<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">START_INDICES</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="o">((</span><span class="nv">j</span><span class="o">=</span><span class="m">0</span><span class="p">;</span><span class="w"> </span>j&lt;block_size<span class="p">;</span><span class="w"> </span>j++<span class="o">))</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">        </span><span class="nv">node_index</span><span class="o">=</span><span class="k">$((</span><span class="w"> </span><span class="o">(</span><span class="nv">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">j</span><span class="o">)</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="nv">total_nodes</span><span class="w"> </span><span class="k">))</span>
+<span class="w">        </span><span class="nv">WRITERS</span><span class="o">+=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">ALL_NODES</span><span class="p">[</span><span class="nv">$node_index</span><span class="p">]</span><span class="si">}</span><span class="s2">,&quot;</span>
+<span class="w">    </span><span class="k">done</span>
+<span class="k">done</span>
+<span class="nv">WRITERS</span><span class="o">=</span><span class="si">${</span><span class="nv">WRITERS</span><span class="p">%,</span><span class="si">}</span><span class="w">  </span><span class="c1"># Remove trailing comma</span>
+<span class="c1"># Assign the rest of the nodes to readers</span>
+<span class="nv">READERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ALL</span><span class="s2">&quot;</span><span class="w"> </span>-x<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$WRITERS</span><span class="s2">&quot;</span><span class="k">)</span>
+
+<span class="c1"># If there are more available nodes for readers than are required </span>
+<span class="c1"># then use the pick command again to make READERS even</span>
+<span class="nv">READERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>-f<span class="w"> </span>--pick<span class="o">=</span><span class="nv">$wanted_readers</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$READERS</span><span class="s2">&quot;</span><span class="k">)</span>
+</code></pre></div>
+
+<h4 id="splitting-nodes-evenly-when-writer-nodes-equals-reader-nodes">Splitting nodes evenly when writer nodes equals reader nodes</h4>
+<p>In the situation where the same number of writer nodes and reader nodes are used, and where these are situated is of no concern:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Use nodeset split function </span>
+<span class="nv">WRITERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>--split<span class="w"> </span><span class="m">2</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$ALL</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-n<span class="w"> </span><span class="m">1</span><span class="k">)</span>
+<span class="nv">READERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>--split<span class="w"> </span><span class="m">2</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$ALL</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-n<span class="w"> </span><span class="m">1</span><span class="k">)</span>
+</code></pre></div>
+
+<h4 id="splitting-nodes-when-uneven-numbers-of-writer-nodes-and-reader-nodes">Splitting nodes when uneven numbers of writer nodes and reader nodes</h4>
+<p>The below command picks the writer nodes randomly across all the available nodes and then splits the rest to reader nodes.</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">writernodes</span><span class="o">=</span><span class="k">$((</span><span class="w"> </span><span class="nv">$writer_nodes_per_member</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">$num_members</span><span class="w"> </span><span class="k">))</span>
+
+<span class="nv">WRITERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>-f<span class="w"> </span>--pick<span class="o">=</span><span class="nv">$writernodes</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ALL</span><span class="s2">&quot;</span><span class="k">)</span>
+<span class="nv">READERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ALL</span><span class="s2">&quot;</span><span class="w"> </span>-x<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$WRITERS</span><span class="s2">&quot;</span><span class="k">)</span>
+
+<span class="c1"># If there are more available nodes for readers than are required then use the pick command again to make READERS even</span>
+<span class="nv">wanted_readers</span><span class="o">=</span><span class="k">$((</span><span class="w"> </span><span class="nv">$reader_node_sets</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">$reader_nodes_per_step</span><span class="w"> </span><span class="k">))</span>
+<span class="nv">READERS</span><span class="o">=</span><span class="k">$(</span>nodeset<span class="w"> </span>-f<span class="w"> </span>--pick<span class="o">=</span><span class="nv">$wanted_readers</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$READERS</span><span class="s2">&quot;</span><span class="k">)</span>
+</code></pre></div>
+
+<h2 id="preliminary-runs">Preliminary runs</h2>
+<p>Run a small single-process run to install binaries to compute nodes. It also acts as a sanity check to ensure the code is working.</p>
+<div class="codehilite"><pre><span></span><code>./fdb-hammer.sh<span class="w"> </span>write<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--nodelist<span class="w"> </span><span class="nv">$ONE</span><span class="w"> </span>--ppn<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--nmembers<span class="w"> </span>default<span class="w"> </span>--nsteps<span class="w"> </span><span class="m">10</span><span class="w"> </span>--nlevels<span class="w"> </span><span class="m">1</span><span class="w"> </span>--nparams<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--root<span class="w"> </span><span class="nv">$build_root</span><span class="w"> </span>--config<span class="w"> </span><span class="nv">$build_root</span>/config.yaml.in<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--artifact-dir<span class="w"> </span><span class="nv">$artifact_dir</span><span class="w"> </span>--artifact-dir-is-shared<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--install<span class="w"> </span>--verbose
+
+<span class="c1"># Clean the FDB afterwards</span>
+rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><span class="nv">fdb_root</span><span class="p">?</span><span class="si">}</span>/rd*
+</code></pre></div>
+
+<p>It is recommended to do this before every main run to ensure the binaries are in the right place.</p>
+<blockquote>
+<p>NOTE: if --install and --artifact-dir-is-shared, and --nodelist has more than one 
+node, all nodes other than the first may fail due to libraries not being found</p>
+</blockquote>
+<h2 id="example-slurm-submission-scripts">Example SLURM Submission Scripts</h2>
+<p>The repository includes several example SLURM submission scripts that demonstrate different configurations:</p>
+<ul>
+<li><strong><code>example_submission_1member.slurm</code></strong>: Basic example for testing with 1 member (9 nodes total)</li>
+<li><strong><code>example_submission_100members.slurm</code></strong>: Large-scale example for 100 members (372 nodes total)  </li>
+<li><strong><code>example_submission_155members.slurm</code></strong>: Large-scale example for 155 members (555 nodes total)</li>
+<li><strong><code>consist_example_submission_1member.slurm</code></strong>: Consistency checking example (9 nodes total)</li>
+</ul>
+<p>These scripts show how to:
+- Calculate and allocate writer and reader nodes based on member count
+- Set up proper node assignment patterns for large member counts
+- Configure timing and synchronization between write and read operations
+- Handle consistency checking configurations</p>
+<p>The scripts use parameterized defaults that can be overridden via command line arguments:</p>
+<div class="codehilite"><pre><span></span><code>sbatch<span class="w"> </span>example_submission_100members.slurm<span class="w"> </span><span class="o">[</span>writeppn<span class="o">]</span><span class="w"> </span><span class="o">[</span>readppn<span class="o">]</span><span class="w"> </span><span class="o">[</span>members<span class="o">]</span><span class="w"> </span><span class="o">[</span>wnpm<span class="o">]</span><span class="w"> </span><span class="o">[</span>rnpm<span class="o">]</span><span class="w"> </span><span class="o">[</span>readersinflight<span class="o">]</span><span class="w"> </span><span class="o">[</span>fdb_root<span class="o">]</span>
+</code></pre></div>
+
+<h2 id="main-runs">Main runs</h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># --- Setup the arguments to run - must be identical for write and read</span>
+<span class="nv">benchmark_args</span><span class="o">=</span><span class="s2">&quot;--nodelist </span><span class="nv">$WRITERS</span><span class="s2"> --ppn </span><span class="nv">$writeppn</span><span class="s2"> \</span>
+<span class="s2">    --nodelist-read </span><span class="nv">$READERS</span><span class="s2"> --ppn-read </span><span class="nv">$readppn</span><span class="s2"> --read-nodes-per-step </span><span class="nv">$rnpm</span><span class="s2"> \</span>
+<span class="s2">    --nmembers </span><span class="nv">$members</span><span class="s2"> \</span>
+<span class="s2">    --root </span><span class="nv">$build_root</span><span class="s2"> --config </span><span class="nv">$build_root</span><span class="s2">/config.yaml.in \</span>
+<span class="s2">    --artifact-dir </span><span class="nv">$artifact_dir</span><span class="s2">&quot;</span>
+
+<span class="nv">first_step_complete</span><span class="o">=</span><span class="k">$((</span><span class="nv">$members</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">$memberdelay</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">$stepwindow</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="m">20</span><span class="k">))</span>
+</code></pre></div>
+
+<blockquote>
+<p>NOTE: The number of writer nodes per member is implied by the size of <code>$WRITERS</code> divided by <code>$members</code></p>
+</blockquote>
+<p>By default <code>memberdelay=2</code> and <code>stepwindow=10</code></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># --- run contending writers and readers</span>
+
+./fdb-hammer.sh<span class="w"> </span>write<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="nv">$benchmark_args</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>&gt;<span class="w"> </span>write.out<span class="w"> </span>&lt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="p">&amp;</span>
+
+sleep<span class="w"> </span><span class="nv">$first_step_complete</span>
+
+./fdb-hammer.sh<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="nv">$benchmark_args</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>&gt;<span class="w"> </span>read.out<span class="w"> </span>&lt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="p">&amp;</span>
+
+<span class="nb">wait</span>
+
+<span class="c1"># OPTIONAL - clean the fdb</span>
+rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><span class="nv">fdb_root</span><span class="p">?</span><span class="si">}</span>/rd*
+</code></pre></div>
+
+<h3 id="changing-the-fdb-directory-for-a-particular-run">Changing the FDB directory for a particular run</h3>
+<p>If there is a requirement to use multiple filesystems or pools for testing, the <code>setup.sh</code> script needs to be run each time to set the desired FDB location</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">new_fdb_root</span><span class="o">=</span>/path/to/new/fdb_root
+./setup.sh<span class="w"> </span>--root<span class="w"> </span><span class="nv">$build_root</span><span class="w"> </span>--backend<span class="w"> </span>lustre<span class="w"> </span>--fdb_root<span class="w"> </span><span class="nv">$new_fdb_root</span>
+</code></pre></div>
+
+<h3 id="running-multiple-writers-on-one-node">Running Multiple Writers on one node</h3>
+<p>The number of writer nodes is derived from the size of the nodelist passed to <code>fdb-hammer.sh</code> and the number of members. </p>
+<ul>
+<li>If the number of members (nmembers) is greater than the number of nodes, each node will handle multiple members. The script calculates how many members per node by dividing nmembers by the number of nodes.</li>
+<li>If the number of nodes is greater than the number of members, multiple nodes may share the same member.</li>
+<li>The script uses these calculations to assign processes on each node to specific members, ensuring all members are covered and distributed as evenly as possible.</li>
+</ul>
+<h2 id="command-line-arguments">Command Line Arguments</h2>
+<p>Below is a summary of all input arguments for <code>fdb-hammer.sh</code>, what they control, and their defaults.</p>
+<p>Note: the defaults shown here are the values defined in the top of the <code>fdb-hammer.sh</code> script; that script is the source of truth for runtime defaults. If you need to change a default permanently, update the variable in <code>fdb-hammer.sh</code>.</p>
+<hr />
+<h3 id="mode"><code>MODE</code></h3>
+<ul>
+<li>Options: <code>write</code>, <code>read</code>, <code>list</code></li>
+<li>Specifies the operation mode: writing data, reading data, or listing data fields.</li>
+<li>Only <code>write</code> and <code>read</code> are needed for ITT380.</li>
+</ul>
+<h3 id="-nodelist-list"><code>--nodelist &lt;list&gt;</code></h3>
+<ul>
+<li>Node list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[001-010]. Do not use 'localhost' in this list, use the local host name if needed.
+  <strong>Default:</strong> a list containing the local host name only (as provided by hostname).</li>
+</ul>
+<h3 id="-ppn-ppn"><code>--ppn &lt;ppn&gt;</code></h3>
+<ul>
+<li>Number of fdb-hammer processes to run on every client node in the provided node list.<br />
+<strong>Default:</strong> <code>1</code></li>
+</ul>
+<h3 id="-nmembers-nmembers"><code>--nmembers &lt;nmembers&gt;</code></h3>
+<ul>
+<li>Total number of members to archive/retrieve by all client nodes and process. It must be a multiple or submultiple of the number of nodes in the nodelist. If larger than the number of nodes, a node will produce/consume data for more than one member. If smaller, multiple nodes will produce/consume data for a same member.
+  <strong>Default:</strong> one per node in --nodelist (this default behaviour can be triggered by providing no value or with --nmembers default).</li>
+</ul>
+<h3 id="-nsteps-nsteps"><code>--nsteps &lt;nsteps&gt;</code></h3>
+<ul>
+<li>Number of steps to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for steps 1 to nsteps.
+  <strong>Default:</strong> <code>90</code></li>
+</ul>
+<h3 id="-nlevels-nlevels"><code>--nlevels &lt;nlevels&gt;</code></h3>
+<ul>
+<li>Number of levels to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', every parallel process in a member archives nlevels unique levels.
+  <strong>Default:</strong> <code>120</code></li>
+</ul>
+<h3 id="-nparams-nparams"><code>--nparams &lt;nparams&gt;</code></h3>
+<ul>
+<li>Number of params to archive by every client process (if MODE is 'write') or archived by writers (if MODE is 'read'). If MODE is 'write', all processes archive fields for the same nparams params.
+  <strong>Default:</strong> <code>6</code></li>
+</ul>
+<h3 id="-field-size-size"><code>--field-size &lt;size&gt;</code></h3>
+<ul>
+<li>Size of the GRIB field to be used as seed for all writes.
+  <strong>Default:</strong> <code>17.37MiB</code></li>
+</ul>
+<h3 id="-no-ccsds"><code>--no-ccsds</code></h3>
+<ul>
+<li>Flag to disable CCSDS compression.
+  <strong>Default (script):</strong> CCSDS compression is enabled by default (<code>ccsds=yes</code>).</li>
+</ul>
+<h3 id="-no-randomise-data"><code>--no-randomise-data</code></h3>
+<ul>
+<li>Flag to disable field data randomisation (if MODE is 'write'). By default, the data of every field written is randomised with decimal values between 0 and 1.
+  <strong>Default (script):</strong> Field data randomisation is enabled by default (<code>randomise_data=yes</code>).</li>
+</ul>
+<h3 id="-itt-no-itt"><code>--itt</code> / <code>--no-itt</code></h3>
+<ul>
+<li>Flag to enable/disable ITT mode, where the writers barrier at the end of every step, and the readers poll the FDB until their data becomes available. Readers retrieve data in a transposed way (i.e., every reader process accesses data for a single or a few time steps). When --itt is supplied and the MODE is 'read', the --nodelist, --ppn, --nmembers, --nsteps, --nlevels and --nparams options are interpreted as a description of the span of weather fields archived in the write mode.
+  <strong>Default:</strong> Enabled</li>
+</ul>
+<h3 id="-nodelist-read-list"><code>--nodelist-read &lt;list&gt;</code></h3>
+<ul>
+<li>If MODE is 'read' and --itt is supplied, a list of nodes to be employed for the 'read' mode, where to run fdb-hammer processes, must be provided via --nodelist-read, following the Slurm node list syntax. E.g. compute-node[011-020]. Do not use 'localhost' in this list, use the local host name if needed.
+  <strong>Default:</strong> not set (required in ITT read mode)</li>
+</ul>
+<h3 id="-ppn-read-ppn"><code>--ppn-read &lt;ppn&gt;</code></h3>
+<ul>
+<li>If MODE is 'read' and --itt is supplied, the number of fdb-hammer processes per node to run for the 'read' mode must be provided via --ppn-read.
+  <strong>Default:</strong> not set (required in ITT read mode)</li>
+</ul>
+<h3 id="-read-nodes-per-step-nnodes"><code>--read-nodes-per-step &lt;nnodes&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', --read-nodes-per-step determines the number of reader nodes to employ for reading data for every written step. It must be equal or smaller than the number of nodes in --nodelist-read. If smaller, it must be a divisor.
+  <strong>Default:</strong> one node in --nodelist-read per step if --nsteps is greater than or equal to the number of nodes in the nodelist, or length(--nodelist-read) / --nsteps otherwise (this default behaviour can be triggered by providing no value or with --read-nodes-per-step default).</li>
+</ul>
+<h3 id="-barrier-port-port"><code>--barrier-port &lt;port&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'write', the port specified in --port will be used on the first writer node to listen for peer nodes to barrier.
+  <strong>Default:</strong> <code>7777</code></li>
+</ul>
+<h3 id="-barrier-max-wait-seconds"><code>--barrier-max-wait &lt;seconds&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'write', --barrier-max-wait determines the number of seconds to wait for peer nodes during barriers before aborting.
+  <strong>Default:</strong> <code>10</code></li>
+</ul>
+<h3 id="-poll-period-period"><code>--poll-period &lt;period&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', --poll-period determines the number of seconds between list/polling retries in reader processes.
+  <strong>Default:</strong> <code>10</code></li>
+</ul>
+<h3 id="-poll-max-attempts-attempts"><code>--poll-max-attempts &lt;attempts&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', --poll-max-attempts determines the maximum number of list retries before failing.
+  <strong>Default:</strong> <code>200</code></li>
+</ul>
+<h3 id="-member-delay-seconds"><code>--member-delay &lt;seconds&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'write', writer processes for a given member are launched with a delay of 'seconds' seconds after the processes for the previous member. Decimal numbers supported.
+  <strong>Default:</strong> <code>2</code></li>
+</ul>
+<h3 id="-reader-delay-seconds"><code>--reader-delay &lt;seconds&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', reader processes for a given step are launched with a delay of 'seconds' seconds after the processes for the previous step. Decimal numbers supported.
+  <strong>Default:</strong> <code>0</code></li>
+</ul>
+<h3 id="-step-window-seconds"><code>--step-window &lt;seconds&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'write', --step-window determines the number of seconds allowed per writer process to perform the I/O for a step. If this amount of time is not consumed during I/O, the process sleeps until it is fully consumed. If the window is exceeded, the process prints a message in stdout.
+  <strong>Default:</strong> <code>10</code></li>
+</ul>
+<h3 id="-random-delay-percent"><code>--random-delay &lt;percent&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'write', every writer process sleeps for a random amount of time between 0 and (--step-window * percent / 100) before starting I/O.
+  <strong>Default:</strong> <code>100</code></li>
+</ul>
+<h3 id="-read-step-window-seconds"><code>--read-step-window &lt;seconds&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', --read-step-window determines the number of seconds allowed for reader processes for a given step to perform the I/O. If this amount of time is not consumed during I/O, the processes sleep until it is fully consumed. If a process exceeds the window, it prints a message in stdout.
+  <strong>Default:</strong> <code>10</code></li>
+</ul>
+<h3 id="-read-random-delay-percent"><code>--read-random-delay &lt;percent&gt;</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', every reader process sleeps for a random amount of time between 0 and (--read-step-window * percent / 100) before starting I/O.
+  <strong>Default:</strong> <code>0</code></li>
+</ul>
+<h3 id="-prelist-no-prelist"><code>--prelist</code> / <code>--no-prelist</code></h3>
+<ul>
+<li>If --itt is specified and MODE is 'read', this flag enables/disables pre-listing of the locations of all fields to be read by every reader node. The first process in every reader node performs the pre-listing, splits the obtained field locations in as many subsets as --ppn-read, and every reader process is assigned one such subset for direct bulk data retrieval without listing. If this flag is disabled every reader process lists the fields of its assigned subset.
+  <strong>Default:</strong> Enabled</li>
+</ul>
+<h3 id="-root-path"><code>--root &lt;path&gt;</code></h3>
+<ul>
+<li>Path to the root directory where the FDB and other repositories and binaries have been installed.
+  <strong>Default:</strong> <code>$HOME/fdb-benchmark</code></li>
+</ul>
+<h3 id="-config-path"><code>--config &lt;path&gt;</code></h3>
+<ul>
+<li>Path to an FDB client configuration file. This file will be deployed on all client nodes in nodelist. It can contain wildcards such as @SCHEMA_PATH@ which will be replaced by the actual schema file path on that client node.
+  <strong>Default:</strong> <code>&lt;root&gt;/config.yaml.in</code></li>
+</ul>
+<h3 id="-prolog-script-path"><code>--prolog-script &lt;path&gt;</code></h3>
+<ul>
+<li>Path to a prolog script to be sourced first thing on each node in nodelist, for example to load required modules.
+  <strong>Default:</strong> none</li>
+</ul>
+<h3 id="-md-check"><code>--md-check</code></h3>
+<ul>
+<li>Flag to enable metadata consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification.
+  <strong>Default:</strong> disabled</li>
+</ul>
+<h3 id="-full-check"><code>--full-check</code></h3>
+<ul>
+<li>Flag to enable metadata and data consistency checks. The reader fdb-hammer processes become memory-hungry if this parameter is enabled, as they need to buffer all fields read for later verification. This option is more compute demanding than --md-check.
+  <strong>Default:</strong> disabled</li>
+</ul>
+<h3 id="-install"><code>--install</code></h3>
+<ul>
+<li>Flag to enable installation of fdb-hammer and other necessary binaries on the client nodes. It must be specified on the first run on a given set of client nodes, or if the binaries on these nodes need to be updated with new ones.
+  <strong>Default:</strong> disabled</li>
+</ul>
+<h3 id="-artifact-dir-path"><code>--artifact-dir &lt;path&gt;</code></h3>
+<ul>
+<li>Path where to install binaries and artifacts on the client nodes. Use '~' to refer to the home directory on the nodes, but do not set artifact-dir to only '~'.
+  <strong>Default:</strong> <code>~/fdb-benchmark/artifacts</code></li>
+</ul>
+<h3 id="-artifact-dir-is-shared-no-artifact-dir-is-shared"><code>--artifact-dir-is-shared</code> / <code>--no-artifact-dir-is-shared</code></h3>
+<ul>
+<li>Flag to be provided if the artifact directory on the client nodes is shared via a networked file system.
+  <strong>Default:</strong> yes</li>
+</ul>
+<h3 id="-verbose"><code>--verbose</code></h3>
+<ul>
+<li>Print field identifiers archived or retrieved.
+  <strong>Default:</strong> disabled</li>
+</ul>
+<h3 id="-h-help"><code>-h</code>, <code>--help</code></h3>
+<ul>
+<li>show this menu</li>
+</ul>
+<hr />
+<h2 id="current-limitations">Current Limitations</h2>
+<h3 id="limitations-for-combinations-of-nodes-per-reader-itt-read-mode">Limitations for Combinations of Nodes per Reader (ITT Read Mode)</h3>
+<ul>
+<li>The number of reader nodes per step (<code>--read-nodes-per-step</code>) must be less than or equal to the total number of nodes specified in <code>--nodelist-read</code>.</li>
+<li>If <code>--read-nodes-per-step</code> is less than the total number of reader nodes, it must be a divisor of the total number of reader nodes.</li>
+<li>If the <code>--prelist</code> option is enabled, the number of levels (<code>--nlevels</code>) must be divisible by the number of reader nodes per step.</li>
+<li>If the number of steps (<code>--nsteps</code>) is less than the number of reader nodes, the number of reader nodes must be divisible by the number of steps.</li>
+<li>These constraints ensure that the workload is evenly distributed and that each reader node gets a valid subset of data to process.</li>
+</ul>
+<p>If these conditions are not met, the script will abort with an error message to prevent misconfiguration and ensure correct parallel execution.</p>
+<h2 id="running-consistency-checks">Running Consistency Checks</h2>
+<p>It is important that, not only, that the storage subsystem is able to manage the demands of the ECMWF operational workflow but also that it does so whilst ensuring the correctness of data.</p>
+<p>Therefore, it is also required to do a separate run with consistency checks enabled that ensures the correctness of data is maintained. Enabling these checks affects performance and so no timing data is required for these runs.</p>
+<p>The consistency checking example can be found in <code>consist_example_submission_1member.slurm</code>, which shows the proper configuration:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># To enable consistency checks change the benchmark_args to the following:</span>
+<span class="nv">benchmark_args</span><span class="o">=</span><span class="s2">&quot;--nodelist </span><span class="nv">$WRITERS</span><span class="s2"> --ppn </span><span class="nv">$writeppn</span><span class="s2"> --field-size 17.37MiB \</span>
+<span class="s2">    --nodelist-read </span><span class="nv">$READERS</span><span class="s2"> --ppn-read </span><span class="nv">$readppn</span><span class="s2"> --read-nodes-per-step </span><span class="nv">$rnpm</span><span class="s2"> \</span>
+<span class="s2">    --nmembers </span><span class="nv">$members</span><span class="s2"> --nsteps 90 --nlevels 120 --nparams 6 \</span>
+<span class="s2">    --root </span><span class="nv">$build_root</span><span class="s2"> --config </span><span class="nv">$build_root</span><span class="s2">/config.yaml.in \</span>
+<span class="s2">    --artifact-dir </span><span class="nv">$artifact_dir</span><span class="s2"> --no-itt --full-check --no-randomise-data --no-prelist&quot;</span>
+</code></pre></div>
+
+<blockquote>
+<p>NOTE: This disables the random ordering of an ITT benchmark run and makes the reading deterministic. The consistency checker also requires a longer delay before starting readers to ensure sufficient writes have completed.</p>
+</blockquote>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Example calculation for sleep time before read runs start:</span>
+<span class="c1"># 8 * $member_delay + step-window + safety_margin</span>
+<span class="c1"># e.g.</span>
+<span class="nv">sleeptime</span><span class="o">=</span><span class="k">$((</span><span class="m">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="m">200</span><span class="k">))</span>
+</code></pre></div>
+
+<h2 id="clean-up-procedure">Clean-up procedure</h2>
+<p>If the benchmark run hangs or terminates abruptly follow these steps to clean up. Uses the clush commands from clustershell</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># list active writer/reader processes on the compute nodes</span>
+clush<span class="w"> </span>-w<span class="w"> </span><span class="nv">$ALL</span><span class="w"> </span><span class="s2">&quot;ps -aux | grep &#39;^</span><span class="nv">$USER</span><span class="s2"> &#39; | wc -l&quot;</span>
+<span class="c1"># if any, kill as follows</span>
+<span class="c1">#clush -w $ALL &quot;ps -aux | grep &#39;fdb-hammer &#39; | awk &#39;{print \$2}&#39; | xargs -I{} kill {}&quot;</span>
+<span class="c1">#clush -w $ALL &quot;ps -aux | grep &#39;bash -s &#39; | awk &#39;{print \$2}&#39; | xargs -I{} kill {}&quot;</span>
+<span class="c1">#clush -w $ALL &quot;ps -aux | grep &#39;timeout 500&#39; | awk &#39;{print \$2}&#39; | xargs -I{} kill {}&quot;</span>
+
+<span class="c1"># list active orchestrating processes on the login/orchestrating node</span>
+ps<span class="w"> </span>-aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>fdb-hammer.sh
+<span class="c1"># if any, kill as follows</span>
+<span class="c1">#ps -aux | grep fdb-hammer.sh | awk &#39;{print $2}&#39; | xargs -I{} kill {}</span>
+
+<span class="c1"># list leftover lock files in the compute nodes</span>
+clush<span class="w"> </span>-w<span class="w"> </span><span class="nv">$ALL</span><span class="w"> </span><span class="s1">&#39;ls /tmp/$USER/&#39;</span>
+<span class="c1"># if any, remove as follows</span>
+<span class="c1">#clush -w $ALL &#39;rm -rf /tmp/$USER/fdb-benchmark*&#39;</span>
+
+<span class="c1"># --- other cleanup tasks, usually required if needing to start from scratch,</span>
+<span class="c1">#     rerun with manipulated artifacts, or recompile the benchmark.</span>
+<span class="c1">#     Sorted from less to more destructive.</span>
+
+<span class="c1"># removes the FDB data directory</span>
+rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><span class="nv">fdb_root</span><span class="p">?</span><span class="si">}</span>
+
+<span class="c1"># removes the artifacts installed by setup.sh</span>
+rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><span class="nv">SCRATCH</span><span class="p">?</span><span class="si">}</span>/fdb-benchmark
+
+<span class="c1"># removes the benchmark build</span>
+rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><span class="nv">build_root</span><span class="p">?</span><span class="si">}</span>
+
+<span class="c1"># removes the benchmark repository</span>
+rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><span class="nv">SCRATCH</span><span class="p">?</span><span class="si">}</span>/git/fdb-benchmark
+</code></pre></div>
+</body>
+</html>

@@ -1,11 +1,11 @@
-# fdb-BM-test
+# fdb-benchmark
 
-The fdb-BM-test is used to simulate the quality and quantity of filesystem I/O operations in ECMWF’s time-critical workflows. 
+The fdb-benchmark is used to simulate the quality and quantity of filesystem I/O operations in ECMWF's time-critical workflows.
 
 The test writes synthetic forecast output fields from a number of concurrent writer processes executing on compute nodes.
 
-At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for “product generation”, “pgen” post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
-For this, fdb-BM-test uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up. 
+At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for "product generation", "pgen" post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
+For this, fdb-benchmark uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up.
 
 ## Installation
 
@@ -46,21 +46,21 @@ Obtain the fdb source, build and install the binaries
     --fdb-root $fdb_root
 ```
 
-## Running fdb-BM-test
+## Running fdb-benchmark
 
-### How fdb-BM-test works
+### How fdb-benchmark works
 
-The fdb-BM-test is orchestrated by `fdb-hammer.sh` and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to `fdbh_one_node.sh` for each instance required. Finally, it then launches `fdbh_one_node.sh` on each node, either locally or via SSH, with all relevant arguments.
+The fdb-benchmark is orchestrated by `fdb-benchmark.sh` and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to `fdbh_one_node.sh` for each instance required. Finally, it then launches `fdbh_one_node.sh` on each node, either locally or via SSH, with all relevant arguments.
 
 `fdbh_one_node.sh` takes the arguments and executes the benchmark workload on that node, handling CPU pinning, work distribution and running the `fdb-hammer` binary in parallel.
 
-After all nodes finish `fdb-hammer.sh` collects output, aggregates results and prints summary statistics.
+After all nodes finish `fdb-benchmark.sh` collects output, aggregates results and prints summary statistics.
 
-Separate instances of `fdb-hammer.sh` need to be run concurrently, with one handling the setup and running of the `WRITERS` and another handling the setup and running of the `READERS`.
+Separate instances of `fdb-benchmark.sh` need to be run concurrently, with one handling the setup and running of the `WRITERS` and another handling the setup and running of the `READERS`.
 
 ### Setting up the WRITERS and READERS
 
-The fdb-BM-test has been tested using the `nodeset` linux utility and the instructions below assume its availability. If `nodeset` isn't available or you have a different preferred utility, please consult its instructions for functionality.
+The fdb-benchmark has been tested using the `nodeset` linux utility and the instructions below assume its availability. If `nodeset` isn't available or you have a different preferred utility, please consult its instructions for functionality.
 
 ```bash
 # Get the complete list of all nodes
@@ -182,7 +182,7 @@ Run a small single-process run to install binaries to compute nodes. It also act
 
 ```bash
 
-./fdb-hammer.sh write \
+./fdb-benchmark.sh write \
     --nodelist $ONE --ppn 1 \
     --nmembers default --nsteps 10 --nlevels 1 --nparams 1 \
     --root $build_root --config $build_root/config.yaml.in \
@@ -238,13 +238,13 @@ By default `memberdelay=2` and `stepwindow=10`
 ```bash
 # --- run contending writers and readers
 
-./fdb-hammer.sh write \
+./fdb-benchmark.sh write \
     $benchmark_args \
     > write.out < /dev/null &
 
 sleep $first_step_complete
 
-./fdb-hammer.sh read \
+./fdb-benchmark.sh read \
     $benchmark_args \
     > read.out < /dev/null &
 
@@ -264,16 +264,16 @@ new_fdb_root=/path/to/new/fdb_root
 ```
 ### Running Multiple Writers on one node
 
-The number of writer nodes is derived from the size of the nodelist passed to `fdb-hammer.sh` and the number of members. 
+The number of writer nodes is derived from the size of the nodelist passed to `fdb-benchmark.sh` and the number of members. 
 
 * If the number of members (nmembers) is greater than the number of nodes, each node will handle multiple members. The script calculates how many members per node by dividing nmembers by the number of nodes.
 * If the number of nodes is greater than the number of members, multiple nodes may share the same member.
 * The script uses these calculations to assign processes on each node to specific members, ensuring all members are covered and distributed as evenly as possible.
 
 ## Command Line Arguments
-Below is a summary of all input arguments for `fdb-hammer.sh`, what they control, and their defaults.
+Below is a summary of all input arguments for `fdb-benchmark.sh`, what they control, and their defaults.
 
-Note: the defaults shown here are the values defined in the top of the `fdb-hammer.sh` script; that script is the source of truth for runtime defaults. If you need to change a default permanently, update the variable in `fdb-hammer.sh`.
+Note: the defaults shown here are the values defined in the top of the `fdb-benchmark.sh` script; that script is the source of truth for runtime defaults. If you need to change a default permanently, update the variable in `fdb-benchmark.sh`.
 
 ---
 
@@ -470,9 +470,9 @@ clush -w $ALL "ps -aux | grep '^$USER ' | wc -l"
 #clush -w $ALL "ps -aux | grep 'timeout 500' | awk '{print \$2}' | xargs -I{} kill {}"
 
 # list active orchestrating processes on the login/orchestrating node
-ps -aux | grep fdb-hammer.sh
+ps -aux | grep fdb-benchmark.sh
 # if any, kill as follows
-#ps -aux | grep fdb-hammer.sh | awk '{print $2}' | xargs -I{} kill {}
+#ps -aux | grep fdb-benchmark.sh | awk '{print $2}' | xargs -I{} kill {}
 
 # list leftover lock files in the compute nodes
 clush -w $ALL 'ls /tmp/$USER/'

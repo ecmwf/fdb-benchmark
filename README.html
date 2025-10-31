@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FDB Benchmark Test Documentation</title>
+    <title>FDB Benchmark Documentation</title>
     <style>
         /* Print-friendly CSS */
         @media print {
@@ -13,30 +12,83 @@
                 line-height: 1.4;
                 color: black;
                 background: white;
+                margin: 0.5in;
             }
             h1, h2, h3, h4, h5, h6 {
                 break-after: avoid;
                 page-break-after: avoid;
+                color: #2c3e50;
+            }
+            h1 {
+                font-size: 20pt;
+                border-bottom: 2pt solid #3498db;
+                padding-bottom: 8pt;
+                margin-bottom: 12pt;
+            }
+            h2 {
+                font-size: 16pt;
+                border-bottom: 1pt solid #ecf0f1;
+                padding-bottom: 4pt;
+                margin-top: 16pt;
+                margin-bottom: 8pt;
+            }
+            h3 {
+                font-size: 14pt;
+                margin-top: 12pt;
+                margin-bottom: 6pt;
             }
             pre, code {
-                font-size: 10pt;
-                background: #f5f5f5 !important;
-                border: 1px solid #ccc;
-                padding: 5px;
+                font-size: 9pt;
+                font-family: 'Courier New', Courier, monospace;
+                background: #f8f9fa !important;
+                border: 1pt solid #dee2e6;
+                padding: 4pt;
                 break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            pre {
+                padding: 8pt;
+                margin: 8pt 0;
+                overflow: visible;
+                white-space: pre-wrap;
+                word-wrap: break-word;
             }
             table {
                 break-inside: avoid;
                 border-collapse: collapse;
                 width: 100%;
+                font-size: 11pt;
+                margin: 8pt 0;
             }
             th, td {
-                border: 1px solid #ccc;
-                padding: 5px;
+                border: 1pt solid #dee2e6;
+                padding: 4pt 6pt;
                 text-align: left;
+                vertical-align: top;
             }
-            .page-break {
-                page-break-before: always;
+            th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+            }
+            ul, ol {
+                margin: 6pt 0;
+                padding-left: 20pt;
+            }
+            li {
+                margin: 3pt 0;
+            }
+            p {
+                margin: 6pt 0;
+                line-height: 1.4;
+            }
+            blockquote {
+                border-left: 2pt solid #3498db;
+                margin: 8pt 0;
+                padding-left: 8pt;
+                font-style: italic;
+            }
+            .print-instructions {
+                display: none;
             }
         }
         
@@ -45,7 +97,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
             background: #fff;
@@ -60,18 +112,24 @@
         h1 {
             border-bottom: 3px solid #3498db;
             padding-bottom: 10px;
+            font-size: 2.2em;
         }
         
         h2 {
             border-bottom: 2px solid #ecf0f1;
             padding-bottom: 5px;
+            font-size: 1.8em;
+        }
+        
+        h3 {
+            font-size: 1.4em;
         }
         
         code {
             background: #f8f9fa;
             padding: 2px 5px;
             border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', Courier, monospace;
             font-size: 0.9em;
         }
         
@@ -81,7 +139,7 @@
             border-radius: 5px;
             padding: 15px;
             overflow-x: auto;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', Courier, monospace;
             font-size: 0.85em;
             line-height: 1.4;
         }
@@ -152,12 +210,6 @@
             padding: 15px;
             margin: 20px 0;
         }
-        
-        @media print {
-            .print-instructions {
-                display: none;
-            }
-        }
     </style>
 </head>
 <body>
@@ -167,17 +219,18 @@
         <ol>
             <li>Use your browser's Print function (Cmd+P on macOS, Ctrl+P on Windows/Linux)</li>
             <li>Select "Save as PDF" as the destination</li>
+            <li>Choose "More settings" and ensure "Headers and footers" is unchecked</li>
+            <li>Set margins to "Minimum" for better content fit</li>
             <li>Save as "README.pdf" in the project directory</li>
-            <li>Ensure all pages are included and formatting looks correct</li>
         </ol>
         <p><em>This instruction box will not appear in the printed PDF.</em></p>
     </div>
     
-<h1 id="fdb-bm-test">fdb-BM-test</h1>
-<p>The fdb-BM-test is used to simulate the quality and quantity of filesystem I/O operations in ECMWF’s time-critical workflows. </p>
+<h1 id="fdb-benchmark">fdb-benchmark</h1>
+<p>The fdb-benchmark is used to simulate the quality and quantity of filesystem I/O operations in ECMWF's time-critical workflows.</p>
 <p>The test writes synthetic forecast output fields from a number of concurrent writer processes executing on compute nodes.</p>
-<p>At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for “product generation”, “pgen” post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
-For this, fdb-BM-test uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up. </p>
+<p>At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for "product generation", "pgen" post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
+For this, fdb-benchmark uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up.</p>
 <h2 id="installation">Installation</h2>
 <p>Clone the code from the GitHub repository and then checkout tag 1.0.0</p>
 <div class="codehilite"><pre><span></span><code><span class="w">   </span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ecmwf/fdb-benchmark.git
@@ -213,14 +266,14 @@ mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$TMPDIR<
 <span class="w">    </span>--fdb-root<span class="w"> </span><span class="nv">$fdb_root</span>
 </code></pre></div>
 
-<h2 id="running-fdb-bm-test">Running fdb-BM-test</h2>
-<h3 id="how-fdb-bm-test-works">How fdb-BM-test works</h3>
-<p>The fdb-BM-test is orchestrated by <code>fdb-hammer.sh</code> and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to <code>fdbh_one_node.sh</code> for each instance required. Finally, it then launches <code>fdbh_one_node.sh</code> on each node, either locally or via SSH, with all relevant arguments.</p>
+<h2 id="running-fdb-benchmark">Running fdb-benchmark</h2>
+<h3 id="how-fdb-benchmark-works">How fdb-benchmark works</h3>
+<p>The fdb-benchmark is orchestrated by <code>fdb-benchmark.sh</code> and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to <code>fdbh_one_node.sh</code> for each instance required. Finally, it then launches <code>fdbh_one_node.sh</code> on each node, either locally or via SSH, with all relevant arguments.</p>
 <p><code>fdbh_one_node.sh</code> takes the arguments and executes the benchmark workload on that node, handling CPU pinning, work distribution and running the <code>fdb-hammer</code> binary in parallel.</p>
-<p>After all nodes finish <code>fdb-hammer.sh</code> collects output, aggregates results and prints summary statistics.</p>
-<p>Separate instances of <code>fdb-hammer.sh</code> need to be run concurrently, with one handling the setup and running of the <code>WRITERS</code> and another handling the setup and running of the <code>READERS</code>.</p>
+<p>After all nodes finish <code>fdb-benchmark.sh</code> collects output, aggregates results and prints summary statistics.</p>
+<p>Separate instances of <code>fdb-benchmark.sh</code> need to be run concurrently, with one handling the setup and running of the <code>WRITERS</code> and another handling the setup and running of the <code>READERS</code>.</p>
 <h3 id="setting-up-the-writers-and-readers">Setting up the WRITERS and READERS</h3>
-<p>The fdb-BM-test has been tested using the <code>nodeset</code> linux utility and the instructions below assume its availability. If <code>nodeset</code> isn't available or you have a different preferred utility, please consult its instructions for functionality.</p>
+<p>The fdb-benchmark has been tested using the <code>nodeset</code> linux utility and the instructions below assume its availability. If <code>nodeset</code> isn't available or you have a different preferred utility, please consult its instructions for functionality.</p>
 <div class="codehilite"><pre><span></span><code><span class="c1"># Get the complete list of all nodes</span>
 <span class="nv">ALL</span><span class="o">=</span><span class="nv">$JOB_NODELIST</span><span class="w"> </span><span class="c1"># Adjust for the scheduler used</span>
 
@@ -322,7 +375,7 @@ mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$TMPDIR<
 
 <h2 id="preliminary-runs">Preliminary runs</h2>
 <p>Run a small single-process run to install binaries to compute nodes. It also acts as a sanity check to ensure the code is working.</p>
-<div class="codehilite"><pre><span></span><code>./fdb-hammer.sh<span class="w"> </span>write<span class="w"> </span><span class="se">\</span>
+<div class="codehilite"><pre><span></span><code>./fdb-benchmark.sh<span class="w"> </span>write<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--nodelist<span class="w"> </span><span class="nv">$ONE</span><span class="w"> </span>--ppn<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--nmembers<span class="w"> </span>default<span class="w"> </span>--nsteps<span class="w"> </span><span class="m">10</span><span class="w"> </span>--nlevels<span class="w"> </span><span class="m">1</span><span class="w"> </span>--nparams<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--root<span class="w"> </span><span class="nv">$build_root</span><span class="w"> </span>--config<span class="w"> </span><span class="nv">$build_root</span>/config.yaml.in<span class="w"> </span><span class="se">\</span>
@@ -372,13 +425,13 @@ node, all nodes other than the first may fail due to libraries not being found</
 <p>By default <code>memberdelay=2</code> and <code>stepwindow=10</code></p>
 <div class="codehilite"><pre><span></span><code><span class="c1"># --- run contending writers and readers</span>
 
-./fdb-hammer.sh<span class="w"> </span>write<span class="w"> </span><span class="se">\</span>
+./fdb-benchmark.sh<span class="w"> </span>write<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span><span class="nv">$benchmark_args</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>&gt;<span class="w"> </span>write.out<span class="w"> </span>&lt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="p">&amp;</span>
 
 sleep<span class="w"> </span><span class="nv">$first_step_complete</span>
 
-./fdb-hammer.sh<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="se">\</span>
+./fdb-benchmark.sh<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span><span class="nv">$benchmark_args</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>&gt;<span class="w"> </span>read.out<span class="w"> </span>&lt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="p">&amp;</span>
 
@@ -395,15 +448,15 @@ rm<span class="w"> </span>-rf<span class="w"> </span><span class="si">${</span><
 </code></pre></div>
 
 <h3 id="running-multiple-writers-on-one-node">Running Multiple Writers on one node</h3>
-<p>The number of writer nodes is derived from the size of the nodelist passed to <code>fdb-hammer.sh</code> and the number of members. </p>
+<p>The number of writer nodes is derived from the size of the nodelist passed to <code>fdb-benchmark.sh</code> and the number of members. </p>
 <ul>
 <li>If the number of members (nmembers) is greater than the number of nodes, each node will handle multiple members. The script calculates how many members per node by dividing nmembers by the number of nodes.</li>
 <li>If the number of nodes is greater than the number of members, multiple nodes may share the same member.</li>
 <li>The script uses these calculations to assign processes on each node to specific members, ensuring all members are covered and distributed as evenly as possible.</li>
 </ul>
 <h2 id="command-line-arguments">Command Line Arguments</h2>
-<p>Below is a summary of all input arguments for <code>fdb-hammer.sh</code>, what they control, and their defaults.</p>
-<p>Note: the defaults shown here are the values defined in the top of the <code>fdb-hammer.sh</code> script; that script is the source of truth for runtime defaults. If you need to change a default permanently, update the variable in <code>fdb-hammer.sh</code>.</p>
+<p>Below is a summary of all input arguments for <code>fdb-benchmark.sh</code>, what they control, and their defaults.</p>
+<p>Note: the defaults shown here are the values defined in the top of the <code>fdb-benchmark.sh</code> script; that script is the source of truth for runtime defaults. If you need to change a default permanently, update the variable in <code>fdb-benchmark.sh</code>.</p>
 <hr />
 <h3 id="mode"><code>MODE</code></h3>
 <ul>
@@ -622,9 +675,9 @@ clush<span class="w"> </span>-w<span class="w"> </span><span class="nv">$ALL</sp
 <span class="c1">#clush -w $ALL &quot;ps -aux | grep &#39;timeout 500&#39; | awk &#39;{print \$2}&#39; | xargs -I{} kill {}&quot;</span>
 
 <span class="c1"># list active orchestrating processes on the login/orchestrating node</span>
-ps<span class="w"> </span>-aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>fdb-hammer.sh
+ps<span class="w"> </span>-aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>fdb-benchmark.sh
 <span class="c1"># if any, kill as follows</span>
-<span class="c1">#ps -aux | grep fdb-hammer.sh | awk &#39;{print $2}&#39; | xargs -I{} kill {}</span>
+<span class="c1">#ps -aux | grep fdb-benchmark.sh | awk &#39;{print $2}&#39; | xargs -I{} kill {}</span>
 
 <span class="c1"># list leftover lock files in the compute nodes</span>
 clush<span class="w"> </span>-w<span class="w"> </span><span class="nv">$ALL</span><span class="w"> </span><span class="s1">&#39;ls /tmp/$USER/&#39;</span>

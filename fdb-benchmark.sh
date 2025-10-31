@@ -46,7 +46,7 @@ case $key in
     -h|--help)
     echo -e "\
 Usage:\n\n\
-./fdb-hammer.sh <MODE> [options]\n\n\
+./fdb-benchmark.sh <MODE> [options]\n\n\
 MODE: either write, read, or list\n\n\
 Available options:\n\n\
 --nodelist <list>\n\nNode list (following Slurm syntax) where to run fdb-hammer processes. E.g. compute-node[001-010]. Do not use 'localhost' in this list, use the local host name if needed. Default: a list containing the local host name only (as provided by hostname).\n\n\
@@ -264,7 +264,7 @@ done
 set -- "${POSITIONAL[@]}"
 
 if [ ${#POSITIONAL[@]} -ne 1 ] ; then
-    echo "Exactly 1 positional arguments were expected. Found '${POSITIONAL[@]}'. Check ./fdb-hammer.sh --help."
+    echo "Exactly 1 positional arguments were expected. Found '${POSITIONAL[@]}'. Check ./fdb-benchmark.sh --help."
     exit 1
 fi
 

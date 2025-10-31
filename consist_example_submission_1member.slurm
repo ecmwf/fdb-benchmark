@@ -68,7 +68,7 @@ READERS=$(nodeset -f --pick=$wanted_readers "$READERS")
 rm -rf ${fdb_root}/rd*
 
 # Initial write to set up the binaries
-./fdb-hammer.sh write \
+./fdb-benchmark.sh write \
     --nodelist $ONE --ppn 1 --field-size 17.37MiB \
     --nmembers default --nsteps 10 --nlevels 1 --nparams 1 \
     --root $build_root --config $build_root/config.yaml.in \
@@ -87,7 +87,7 @@ benchmark_args="--nodelist $WRITERS --ppn $writeppn --field-size 17.37MiB \
 
 echo "STARTING RUNS at $(date)"
 
-./fdb-hammer.sh write \
+./fdb-benchmark.sh write \
     $benchmark_args \
     > $write_file < /dev/null &
 
@@ -98,7 +98,7 @@ sleeptime=$((16 * $members + 10 + 200 ))
 
 sleep $sleeptime
 
-./fdb-hammer.sh read \
+./fdb-benchmark.sh read \
     $benchmark_args \
     > $read_file < /dev/null &
 

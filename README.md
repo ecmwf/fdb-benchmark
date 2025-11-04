@@ -8,10 +8,11 @@
 
 The fdb-benchmark is used to simulate the quality and quantity of filesystem I/O operations in ECMWF's time-critical workflows.
 
-The test writes synthetic forecast output fields from a number of concurrent writer processes executing on compute nodes.
+The benchmark writes synthetic forecast output fields, for a number of ensemble forecast members, from a number of concurrent writer processes executing on multiple compute nodes.
 
-At the same time, the test also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for "product generation", "pgen" post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes, with the latter being part of each ensemble forecast member.
-For this, fdb-benchmark uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production set-up.
+At the same time, it also simulates, concurrent to the ongoing writing, the consumption of such recently written individual forecast fields by a number of reader processes fetching these fields for "product generation", "pgen" post-processing tasks; the pgen reader processes execute on different compute nodes than the writer processes.
+
+For this, fdb-benchmark uses the same write and read methods from the fdb library, the ECMWF fields database https://github.com/ecmwf/fdb, as the production setup.
 
 ## Installation
 
@@ -24,9 +25,6 @@ Clone the code from the GitHub repository and then checkout tag 1.0.0
 
 Setup some build and install directories
 ```bash
-# where the benchmark source will be cloned and the binaries installed
-export install_dir=/hpc/file/system/install_dir
-
 # fast file system where the benchmark will be built before installing
 build_root=/tmp/fdb-benchmark_$USER
 
@@ -56,35 +54,37 @@ Obtain the fdb source, build and install the binaries
 
 ### How fdb-benchmark works
 
-The fdb-benchmark is orchestrated by `fdb-benchmark.sh` and parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes. It then sets up the arguments to be parsed to `fdbh_one_node.sh` for each instance required. Finally, it then launches `fdbh_one_node.sh` on each node, either locally or via SSH, with all relevant arguments.
+The fdb-benchmark is orchestrated by `fdb-benchmark.sh`, which parses the user parameters to prepare the run environment, expand nodelists and distribute needed information to all nodes to run the benchmark on. It then sets up a set of arguments to be passed to `fdbh_one_node.sh`, which is finally launched on each node via SSH.
 
-`fdbh_one_node.sh` takes the arguments and executes the benchmark workload on that node, handling CPU pinning, work distribution and running the `fdb-hammer` binary in parallel.
+`fdbh_one_node.sh` takes the arguments and executes the benchmark workload on that node by running parallel instances of the `fdb-hammer` binary, handling CPU pinning and work distribution.
 
-After all nodes finish `fdb-benchmark.sh` collects output, aggregates results and prints summary statistics.
+After all nodes finish the execution of `fdbh_one_node.sh`, `fdb-benchmark.sh` collects output, aggregates results and prints summary statistics.
 
-Separate instances of `fdb-benchmark.sh` need to be run concurrently, with one handling the setup and running of the `WRITERS` and another handling the setup and running of the `READERS`.
+Two separate instances of `fdb-benchmark.sh` need to be run concurrently, with one handling the setup and running of the writer processes and another handling the setup and running of the reader processes.
 
-### Setting up the WRITERS and READERS
+### Setting up the sets of writer and reader nodes
 
 The fdb-benchmark has been tested using the `nodeset` linux utility and the instructions below assume its availability. If `nodeset` isn't available or you have a different preferred utility, please consult its instructions for functionality.
 
 ```bash
 # Get the complete list of all nodes
-ALL=$JOB_NODELIST # Adjust for the scheduler used
+ALL=$JOB_NODELIST  # Adjust for the scheduler used
 
-# Slice a single node off for the preliminary installation run
+>NOTE: the nodelist must contain fully qualified host names
+
+# Slice a single node off to be used for a preliminary installation run
 ONE=$(nodeset --slice 1 -f $ALL)
 ```
 
-The test is best run when the `WRITERS` are evenly distributed across the available nodes, as this replicates the way an operational ensemble is run. This is not a requirement for testing but could be for acceptance testing. 
+The test is best run when the set of writer nodes is evenly distributed across the full set of available nodes, as this replicates the way an operational ensemble is run. This is not a requirement for testing but could be for acceptance testing.
 
-Below are three different ways to split the available nodes across the `WRITERS` and `READERS`.
+Below are three different ways to split the set of available nodes into writer and reader node sets.
 
 #### Splitting across separate groups of coupled nodes
 
-If you have a situation where the nodes on the cluster are more connected for certain groups (e.g. nodes all on a single switch or within a leaf of a dragonfly topology), then the techniques below can be used to split the nodes in the `WRITERS` and `READERS`.
+If you have a situation where the nodes on the cluster are more connected for certain groups (e.g. nodes all on a single switch or within a leaf of a dragonfly topology), then the techniques below can be used to split the nodes into writer and reader node sets.
 
-Here it is assumed that there are 5 groups of nodes and that there are 150 writer nodes you want to split so that there are the same number of `WRITERS` per group:
+The following example assumes there is a large set of nodes available for benchmarking (ALL) which belong to 5 different and disjoint groups, and you want to define a set of 150 writer nodes picking the same number of nodes from each different group, and a set of reader nodes comprising the rest:
 
 ```bash
 NUMBER_OF_GROUPS=5
@@ -227,21 +227,32 @@ sbatch example_submission_100members.slurm [writeppn] [readppn] [members] [wnpm]
 
 ```bash
 # --- Setup the arguments to run - must be identical for write and read
-benchmark_args="--nodelist $WRITERS --ppn $writeppn \
-    --nodelist-read $READERS --ppn-read $readppn --read-nodes-per-step $rnpm \
-    --nmembers $members \
+
+members=1
+writeppn=16
+
+rnpm=2
+readppn=32
+
+benchmark_args=" \
+    --nodelist $WRITERS --ppn $writeppn \
+    --nodelist-read $READERS --ppn-read $readppn \
+    --nmembers $members --read-nodes-per-step $rnpm \
     --root $build_root --config $build_root/config.yaml.in \
     --artifact-dir $artifact_dir"
 
+memberdelay=2
+stepwindow=10
 first_step_complete=$(($members * $memberdelay + $stepwindow + 20))
 ```
 >NOTE: The number of writer nodes per member is implied by the size of `$WRITERS` divided by `$members`
 
-By default `memberdelay=2` and `stepwindow=10`
-
-
 
 ```bash
+
+# remove any remaining data in the fdb from previous benchmark runs
+rm -rf ${fdb_root?}/rd*
+
 # --- run contending writers and readers
 
 ./fdb-benchmark.sh write \
@@ -268,12 +279,12 @@ If there is a requirement to use multiple filesystems or pools for testing, the 
 new_fdb_root=/path/to/new/fdb_root
 ./setup.sh --root $build_root --backend lustre --fdb_root $new_fdb_root
 ```
-### Running Multiple Writers on one node
+### Running multiple members on one node
 
-The number of writer nodes is derived from the size of the nodelist passed to `fdb-benchmark.sh` and the number of members. 
+The number of writer nodes per member is derived from the size of the nodelist passed to `fdb-benchmark.sh` and the number of members.
 
 * If the number of members (nmembers) is greater than the number of nodes, each node will handle multiple members. The script calculates how many members per node by dividing nmembers by the number of nodes.
-* If the number of nodes is greater than the number of members, multiple nodes may share the same member.
+* If the number of nodes is greater than the number of members, multiple nodes will handle a same member.
 * The script uses these calculations to assign processes on each node to specific members, ensuring all members are covered and distributed as evenly as possible.
 
 ## Command Line Arguments

@@ -330,6 +330,16 @@ function client {
 
           if [[ "$i" == 0 ]] ; then
 
+            # wait for readiness signal from all workers
+            local p=
+            local signal=
+            for p in `seq 1 $(( ppn - 1 ))` ; do
+              # reads one line from the anonymous pipe into the 'signal' variable
+              read -t 1000 -ru 4 signal
+              [ $? -ne 0 ] && echo "Timed out waiting for worker readiness signal." && exit 1
+              [[ "$signal" != "ready" ]] && echo "Received unexpected readiness signal from worker." && exit 1
+            done
+
             local levels_per_reader_node=$(( nlevels / nodes_per_step ))
             local first_node_level=$(( ( I % nodes_per_step ) * levels_per_reader_node ))
             local node_levels=( "${levelist[@]:${first_node_level}:${levels_per_reader_node}}" )
@@ -425,6 +435,9 @@ EOF
             touch $prelist_fifo
 
           else
+
+            # send readiness signal to process 0
+            echo "ready" >&4
 
             # wait for leader process to notify list completion by opening FIFO for read
             timeout 500 cat $prelist_fifo
@@ -604,10 +617,21 @@ if [[ "$itt" == "yes" ]] && [[ "$mode" == "read" ]] ; then
 
   step_end_reporter &
 
-  # create a FIFO for process 0 to signal other processes that the pre-list has completed
   if [[ "$prelist" == "yes" ]] ; then
+
+    # create a FIFO for process 0 to signal other processes that the pre-list has completed
     prelist_fifo=$(mktemp -u)
     mkfifo $prelist_fifo
+
+    # create an anonymous pipe for processes > 0 to signal process 0 they are ready
+    # create a FIFO (named pipe) in tmpfs
+    pipe=$(mktemp -u)
+    mkfifo $pipe
+    # attach it to fd 4
+    exec 4<>$pipe
+    # turn the pipe into an anonymous pipe by removing the file
+    rm $pipe
+
   fi
 
 fi

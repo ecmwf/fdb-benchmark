@@ -16,11 +16,11 @@ For this, fdb-benchmark uses the same write and read methods from the fdb librar
 
 ## Installation
 
-Clone the code from the GitHub repository and then checkout tag 1.0.0
+Clone the code from the GitHub repository and then checkout tag 1.0.1
 ```bash
    git clone https://github.com/ecmwf/fdb-benchmark.git
    cd fdb-benchmark
-   git checkout 1.0.0
+   git checkout 1.0.1
 ```
 
 Setup some build and install directories

@@ -574,7 +574,7 @@ last_ts=$(cat "${outs[@]}" | grep "Timestamp after last IO" | awk '{print $5}' |
 
 field_size_mb=${field_size%MiB}
 num_nodes=${#nodes[@]}
-bw=$(bc <<< "$NSTEPS * $NLEVELS * $NPARAMS * $field_size_mb / ($last_ts - $first_ts)")
+bw=$(bc <<< "$nmembers * $NSTEPS * $NLEVELS * $NPARAMS * $field_size_mb / ($last_ts - $first_ts)")
 
 avg_sleep_per_step=0
 n_write_window_excess=0

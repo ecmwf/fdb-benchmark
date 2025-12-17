@@ -46,9 +46,18 @@ Obtain the fdb source, build and install the binaries
 ```bash
 ./setup.sh \
     --root $build_root \
-    --backend lustre \
+    --backend posix \
     --fdb-root $fdb_root
 ```
+
+For current testing and usage of the fdb-benchmark the filesystem `MUST` be POSIX semantics (this is specificed via the ```--backend posix``` argument above). 
+
+If the filesystem being used is based on lustre, then the ```--backend lustre``` argument can be used instead. In this case the fdb-benchmark uses the lustre API to offer control over lustre stripe settings as follows:
+
+* ```.toc``` and ```*.index``` files are automatically created with lustre stripe count 1
+* ```*.data``` files are, by default, created with stripe count 8 and stripe size 8MB
+* The above values for the ```*.data``` files can be adjusted by exporting environment variables: ```FDB_DATA_LUSTRE_STRIPE_COUNT``` and ```FDB_DATA_LUSTRE_STRIPE_SIZE``` around line 593 in ```fdbh_one_node.sh```
+
 
 ## Running fdb-benchmark
 
@@ -279,6 +288,7 @@ If there is a requirement to use multiple filesystems or pools for testing, the 
 new_fdb_root=/path/to/new/fdb_root
 ./setup.sh --root $build_root --backend lustre --fdb_root $new_fdb_root
 ```
+
 ### Running multiple members on one node
 
 The number of writer nodes per member is derived from the size of the nodelist passed to `fdb-benchmark.sh` and the number of members.

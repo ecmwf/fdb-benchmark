@@ -56,7 +56,7 @@ If the filesystem being used is based on lustre, then the ```--backend lustre```
 
 * ```.toc``` and ```*.index``` files are automatically created with lustre stripe count 1
 * ```*.data``` files are, by default, created with stripe count 8 and stripe size 8MB
-* The above values can be adjusted by exporting environment variables: ```FDB_DATA_LUSTRE_STRIPE_COUNT``` and ```FDB_DATA_LUSTRE_STRIPE_SIZE``` around line 593 in ```fdbh_one_node.sh```
+* The above values for the ```*.data``` files can be adjusted by exporting environment variables: ```FDB_DATA_LUSTRE_STRIPE_COUNT``` and ```FDB_DATA_LUSTRE_STRIPE_SIZE``` around line 593 in ```fdbh_one_node.sh```
 
 
 ## Running fdb-benchmark

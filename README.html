@@ -274,7 +274,7 @@ mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$TMPDIR<
 <ul>
 <li><code>.toc</code> and <code>*.index</code> files are automatically created with lustre stripe count 1</li>
 <li><code>*.data</code> files are, by default, created with stripe count 8 and stripe size 8MB</li>
-<li>The above values can be adjusted by exporting environment variables: <code>FDB_DATA_LUSTRE_STRIPE_COUNT</code> and <code>FDB_DATA_LUSTRE_STRIPE_SIZE</code> around line 593 in <code>fdbh_one_node.sh</code></li>
+<li>The above values for the <code>*.data</code> files can be adjusted by exporting environment variables: <code>FDB_DATA_LUSTRE_STRIPE_COUNT</code> and <code>FDB_DATA_LUSTRE_STRIPE_SIZE</code> around line 593 in <code>fdbh_one_node.sh</code></li>
 </ul>
 <h2 id="running-fdb-benchmark">Running fdb-benchmark</h2>
 <h3 id="how-fdb-benchmark-works">How fdb-benchmark works</h3>
